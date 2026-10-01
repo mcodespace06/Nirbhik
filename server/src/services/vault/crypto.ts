@@ -47,7 +47,21 @@ export function decryptUserId(encryptedPayload: string): string {
 
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
-
   const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   return decrypted.toString('utf8');
+}
+
+/**
+ * Encrypts an arbitrary string (e.g. Legal Name, Address, Aadhaar) using AES-256-GCM.
+ * Output format: base64(iv + authTag + ciphertext)
+ */
+export function encryptField(text: string): string {
+  return encryptUserId(text);
+}
+
+/**
+ * Decrypts an arbitrary AES-256-GCM encrypted string.
+ */
+export function decryptField(encryptedPayload: string): string {
+  return decryptUserId(encryptedPayload);
 }

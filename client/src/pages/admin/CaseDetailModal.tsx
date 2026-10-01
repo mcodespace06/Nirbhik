@@ -10,7 +10,14 @@ import {
   AlertTriangle, 
   ShieldAlert, 
   CheckCircle2, 
-  AlertCircle
+  AlertCircle,
+  Database,
+  ShieldCheck,
+  FileCheck,
+  Scale,
+  Users,
+  FileText,
+  UserCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -24,11 +31,37 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
   const { user } = useAuth();
   const [caseData, setCaseData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'DETAILS' | 'CHAT' | 'NOTES'>('DETAILS');
+  const [activeTab, setActiveTab] = useState<'DETAILS' | 'CORRELATIONS' | 'ACTION_TAKEN' | 'CHAT' | 'NOTES'>('DETAILS');
 
   // Transition / Action states
   const [actionReason, setActionReason] = useState('');
   const [pendingTargetStatus, setPendingTargetStatus] = useState<string | null>(null);
+
+  // Phase 5: Central DB Correlations (AI-Assisted & Human-in-the-Loop Sign-Off)
+  const [correlations, setCorrelations] = useState<any[]>([]);
+  const [loadingCorrelations, setLoadingCorrelations] = useState(false);
+  const [selectedSignOffCase, setSelectedSignOffCase] = useState<any | null>(null);
+  const [officerBadge, setOfficerBadge] = useState('');
+  const [officerSignOffNotes, setOfficerSignOffNotes] = useState('');
+  const [submittingSignOff, setSubmittingSignOff] = useState(false);
+
+  // Phase 5: Supervisor Approval & QC Workflow
+  const [showSubmitApprovalModal, setShowSubmitApprovalModal] = useState(false);
+  const [proposedAction, setProposedAction] = useState('');
+  const [proposedDecision, setProposedDecision] = useState('');
+  const [submittingApproval, setSubmittingApproval] = useState(false);
+
+  const [showSupervisorDecideModal, setShowSupervisorDecideModal] = useState(false);
+  const [supervisorDecision, setSupervisorDecision] = useState<'APPROVE' | 'REQUEST_REVISION'>('APPROVE');
+  const [supervisorNotes, setSupervisorNotes] = useState('');
+  const [submittingSupervisorDecision, setSubmittingSupervisorDecision] = useState(false);
+
+  // Phase 5: Official Action Taken & Proof of Action
+  const [showActionTakenModal, setShowActionTakenModal] = useState(false);
+  const [actionTakenText, setActionTakenText] = useState('');
+  const [proofFileKey, setProofFileKey] = useState('');
+  const [resolutionSummary, setResolutionSummary] = useState('');
+  const [submittingActionTaken, setSubmittingActionTaken] = useState(false);
 
   // Outcome modal
   const [outcomeModalOpen, setOutcomeModalOpen] = useState(false);
@@ -50,6 +83,22 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
   const [chatBody, setChatBody] = useState('');
   const [requestInfo, setRequestInfo] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
+
+  const fetchCorrelations = async () => {
+    setLoadingCorrelations(true);
+    try {
+      const token = localStorage.getItem('cv_token');
+      const res = await fetch(`/api/admin/cases/${caseId}/correlations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCorrelations(data.correlations || []);
+      }
+    } finally {
+      setLoadingCorrelations(false);
+    }
+  };
 
   const fetchDetails = async () => {
     try {
@@ -236,6 +285,140 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
     }
   };
 
+  const handleSignOffCorrelation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSignOffCase || !officerBadge.trim() || !officerSignOffNotes.trim()) return;
+    setSubmittingSignOff(true);
+    try {
+      const token = localStorage.getItem('cv_token');
+      const res = await fetch(`/api/admin/cases/${caseId}/correlations/sign-off`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          targetCaseId: selectedSignOffCase.id,
+          officerBadge: officerBadge.trim(),
+          officerNotes: officerSignOffNotes.trim(),
+        }),
+      });
+      if (res.ok) {
+        alert('Official Human-in-the-Loop Officer Sign-Off recorded. Cases formally linked.');
+        setSelectedSignOffCase(null);
+        setOfficerBadge('');
+        setOfficerSignOffNotes('');
+        fetchDetails();
+        fetchCorrelations();
+        onCaseUpdated();
+      } else {
+        const data = await res.json();
+        alert(data.error?.message || 'Sign-off failed.');
+      }
+    } finally {
+      setSubmittingSignOff(false);
+    }
+  };
+
+  const handleSubmitForApproval = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!proposedAction.trim() || !proposedDecision.trim()) return;
+    setSubmittingApproval(true);
+    try {
+      const token = localStorage.getItem('cv_token');
+      const res = await fetch(`/api/admin/cases/${caseId}/submit-for-approval`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          proposedAction: proposedAction.trim(),
+          proposedDecision: proposedDecision.trim(),
+        }),
+      });
+      if (res.ok) {
+        setShowSubmitApprovalModal(false);
+        setProposedAction('');
+        setProposedDecision('');
+        fetchDetails();
+        onCaseUpdated();
+        alert('Proposed decision submitted to Superior Officer for Legal Validation.');
+      } else {
+        const data = await res.json();
+        alert(data.error?.message || 'Submission failed.');
+      }
+    } finally {
+      setSubmittingApproval(false);
+    }
+  };
+
+  const handleSupervisorDecide = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingSupervisorDecision(true);
+    try {
+      const token = localStorage.getItem('cv_token');
+      const res = await fetch(`/api/admin/cases/${caseId}/supervisor-decide`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          decision: supervisorDecision,
+          supervisorNotes: supervisorNotes.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        setShowSupervisorDecideModal(false);
+        setSupervisorNotes('');
+        fetchDetails();
+        onCaseUpdated();
+        alert(`Supervisor decision '${supervisorDecision}' registered.`);
+      } else {
+        const data = await res.json();
+        alert(data.error?.message || 'Supervisor decision failed.');
+      }
+    } finally {
+      setSubmittingSupervisorDecision(false);
+    }
+  };
+
+  const handleRecordActionTaken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actionTakenText.trim()) return;
+    setSubmittingActionTaken(true);
+    try {
+      const token = localStorage.getItem('cv_token');
+      const res = await fetch(`/api/admin/cases/${caseId}/action-taken`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          actionTaken: actionTakenText.trim(),
+          proofFileKey: proofFileKey.trim() || undefined,
+          resolutionSummary: resolutionSummary.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        setShowActionTakenModal(false);
+        setActionTakenText('');
+        setProofFileKey('');
+        setResolutionSummary('');
+        fetchDetails();
+        onCaseUpdated();
+        alert('Official Action Taken recorded and published to victim dashboard.');
+      } else {
+        const data = await res.json();
+        alert(data.error?.message || 'Failed to record action taken.');
+      }
+    } finally {
+      setSubmittingActionTaken(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -272,10 +455,10 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
         </div>
 
         {/* Tab Navigation */}
-        <div className="px-6 border-b border-slate-200 flex gap-4 text-xs font-bold">
+        <div className="px-6 border-b border-slate-200 flex gap-4 text-xs font-bold overflow-x-auto">
           <button
             onClick={() => setActiveTab('DETAILS')}
-            className={`py-3 border-b-2 transition-colors ${
+            className={`py-3 border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'DETAILS'
                 ? 'border-sky-600 text-sky-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -284,8 +467,33 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
             Case Dossier & Triage
           </button>
           <button
+            onClick={() => {
+              setActiveTab('CORRELATIONS');
+              if (correlations.length === 0) fetchCorrelations();
+            }}
+            className={`py-3 border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'CORRELATIONS'
+                ? 'border-sky-600 text-sky-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Central DB Correlations ({correlations.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('ACTION_TAKEN')}
+            className={`py-3 border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'ACTION_TAKEN'
+                ? 'border-sky-600 text-sky-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <FileCheck className="w-3.5 h-3.5" />
+            <span>Action Taken & Supervisor QC</span>
+          </button>
+          <button
             onClick={() => setActiveTab('CHAT')}
-            className={`py-3 border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`py-3 border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'CHAT'
                 ? 'border-sky-600 text-sky-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -296,7 +504,7 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
           </button>
           <button
             onClick={() => setActiveTab('NOTES')}
-            className={`py-3 border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`py-3 border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'NOTES'
                 ? 'border-sky-600 text-sky-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -348,6 +556,68 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
                   {caseData.description}
                 </div>
               </div>
+
+              {/* Phase 5 Review: FIR Draft & Accused Information */}
+              {(() => {
+                const submittedEvent = (caseData.events || []).find((e: any) => e.type === 'SUBMITTED');
+                const accusedList = submittedEvent?.payload?.accusedList || [];
+                const firDraft = submittedEvent?.payload?.firDraft;
+
+                return (
+                  <>
+                    {firDraft && (
+                      <div className="p-4 rounded-2xl bg-slate-900 text-slate-100 border border-slate-800 space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-bold text-sky-400 uppercase tracking-wider">
+                          <FileText className="w-4 h-4 text-sky-400" />
+                          <span>Formal First Information Report (FIR Draft) - Section 173 BNSS / 154 CrPC</span>
+                        </div>
+                        <pre className="font-mono text-xs whitespace-pre-wrap leading-relaxed text-slate-300 max-h-48 overflow-y-auto bg-slate-950 p-3 rounded-xl border border-slate-800">
+                          {firDraft}
+                        </pre>
+                      </div>
+                    )}
+
+                    {accusedList.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
+                          <Users className="w-4 h-4 text-sky-700" />
+                          <span>Reported Accused & Associated Individuals ({accusedList.length})</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {accusedList.map((acc: any, i: number) => (
+                            <div key={i} className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-1.5 text-xs">
+                              <div className="flex justify-between items-center">
+                                <strong className="text-slate-900 font-bold text-sm">{acc.name}</strong>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                  acc.role === 'PRIMARY_ACCUSED' ? 'bg-rose-100 text-rose-800' :
+                                  acc.role === 'ACCOMPLICE' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {acc.role}
+                                </span>
+                              </div>
+                              {acc.onlineHandles && (
+                                <div className="text-[11px] text-sky-800 font-mono bg-sky-50 px-2 py-0.5 rounded">
+                                  Handles: {acc.onlineHandles}
+                                </div>
+                              )}
+                              {acc.image && (
+                                <div className="text-[11px] text-slate-500 truncate">
+                                  Photo: {acc.image}
+                                </div>
+                              )}
+                              {acc.proof && (
+                                <p className="text-[11px] text-slate-600 italic border-l-2 border-slate-300 pl-2 mt-1">
+                                  "{acc.proof}"
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* AI Intelligence & Screening Card (PRD §5 / ARCHITECTURE §7) */}
               {caseData.aiAnalyses && caseData.aiAnalyses.length > 0 ? (
@@ -573,12 +843,27 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
                         Escalate Case
                       </button>
                       <button
+                        onClick={() => setShowSubmitApprovalModal(true)}
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold shadow-sm"
+                      >
+                        Submit to Supervisor (QC)
+                      </button>
+                      <button
                         onClick={() => setPendingTargetStatus('RESOLVED')}
                         className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
                       >
                         Mark Resolved
                       </button>
                     </>
+                  )}
+                  {caseData.status === 'FLAGGED_REVIEW' && (
+                    <button
+                      onClick={() => setShowSupervisorDecideModal(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-indigo-800 hover:bg-indigo-900 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Supervisor QC Review & Decision</span>
+                    </button>
                   )}
                   {caseData.status === 'NEEDS_INFO' && (
                     <button
@@ -588,6 +873,13 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
                       Resume Investigation
                     </button>
                   )}
+
+                  <button
+                    onClick={() => setShowActionTakenModal(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold"
+                  >
+                    Record Action Taken & Proof
+                  </button>
 
                   <button
                     onClick={() => setOutcomeModalOpen(true)}
@@ -628,6 +920,197 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Phase 5: Central DB Correlations Tab */}
+          {activeTab === 'CORRELATIONS' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-sky-950 uppercase tracking-wider">
+                    <Database className="w-4 h-4 text-sky-700" />
+                    <span>Central DB Correlation Engine (AI-Assisted)</span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Scans all active and historical cases for matching accused identities, social handles, and location patterns.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchCorrelations}
+                  disabled={loadingCorrelations}
+                  className="px-3.5 py-1.5 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingCorrelations ? 'animate-spin' : ''}`} />
+                  <span>Scan Central DB</span>
+                </button>
+              </div>
+
+              {/* Human-in-the-Loop Safeguard Notice */}
+              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-950 flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <strong>Human-in-the-Loop Safeguard Mandate:</strong> The AI acts strictly as an advisory matching recommendation engine. Explicit <strong>Officer Sign-Off with Official Badge Number</strong> is strictly required before formally linking distinct case dossiers together.
+                </div>
+              </div>
+
+              {loadingCorrelations ? (
+                <div className="p-12 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <RefreshCw className="w-6 h-6 animate-spin text-sky-700" />
+                  <span>Querying Central DB correlations and cross-referencing accused records...</span>
+                </div>
+              ) : correlations.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500">
+                  No matching accused records or correlated case patterns detected across the central database.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {correlations.map((corr) => (
+                    <div key={corr.caseId} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900">{corr.title}</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                            {corr.pseudonym}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-100 text-sky-800">
+                            {corr.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                            corr.confidence >= 0.8 ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            Match Confidence: {(corr.confidence * 100).toFixed(0)}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSignOffCase({ id: corr.caseId, title: corr.title })}
+                            className="px-3 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+                          >
+                            <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Officer Sign-Off to Link</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Match Reasons */}
+                      {corr.matchReasons && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {corr.matchReasons.map((reason: string, rIdx: number) => (
+                            <span key={rIdx} className="text-[10px] font-semibold bg-sky-50 text-sky-800 px-2.5 py-0.5 rounded-full border border-sky-200">
+                              ✓ {reason}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Correlated Accused Profiles */}
+                      {corr.accusedList && corr.accusedList.length > 0 && (
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5">
+                          <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">
+                            Correlated Accused Profiles from Linked Case:
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            {corr.accusedList.map((acc: any, aIdx: number) => (
+                              <div key={aIdx} className="bg-white p-2 rounded-lg border border-slate-200">
+                                <div className="font-bold text-slate-800">{acc.name} ({acc.role})</div>
+                                {acc.onlineHandles && (
+                                  <div className="text-[11px] text-slate-500 font-mono">Handles: {acc.onlineHandles}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Phase 5: Action Taken & Supervisor QC Tab */}
+          {activeTab === 'ACTION_TAKEN' && (
+            <div className="space-y-6 animate-in fade-in duration-150">
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-800">
+                    <ShieldCheck className="w-4 h-4 text-sky-700" />
+                    <span>Superior Officer Quality Control Gate</span>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                    caseData.status === 'FLAGGED_REVIEW' ? 'bg-amber-100 text-amber-800' :
+                    caseData.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                  }`}>
+                    {caseData.status === 'FLAGGED_REVIEW' ? 'Pending Supervisor Approval' : caseData.status === 'RESOLVED' ? 'Legally Concluded' : 'Investigation Active'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Before finalizing the investigation or issuing public written documents, the proposed decision must be reviewed and legally validated by a Superior Officer.
+                </p>
+
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
+                  {caseData.status === 'IN_PROGRESS' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSubmitApprovalModal(true)}
+                      className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Submit Proposal to Superior Officer</span>
+                    </button>
+                  )}
+
+                  {(caseData.status === 'FLAGGED_REVIEW' || user?.role === 'SUPER_ADMIN') && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSupervisorDecideModal(true)}
+                      className="px-4 py-2 bg-indigo-800 hover:bg-indigo-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Superior Officer Review (Approve / Revise)</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowActionTakenModal(true)}
+                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm ml-auto"
+                  >
+                    <FileCheck className="w-3.5 h-3.5" />
+                    <span>Record Official Action Taken & Upload Proof</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Taken Audit Events History */}
+              {(() => {
+                const actionEv = (caseData.events || []).find((e: any) => e.type === 'ACTION_TAKEN_RECORDED');
+                if (!actionEv) return null;
+                const p = actionEv.payload || {};
+                return (
+                  <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-300 space-y-3">
+                    <div className="flex justify-between items-center text-xs">
+                      <strong className="text-emerald-950 font-bold flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        Certified Action Taken Record
+                      </strong>
+                      <span className="text-[10px] text-slate-400">{new Date(actionEv.createdAt).toLocaleString()}</span>
+                    </div>
+                    <p className="text-xs text-slate-800 bg-white p-3 rounded-xl border border-emerald-200">
+                      {p.actionTaken}
+                    </p>
+                    {p.proofFileKey && (
+                      <div className="text-xs text-emerald-900 flex items-center gap-2">
+                        <span className="font-semibold">Uploaded Proof of Action:</span>
+                        <span className="font-mono bg-white px-2 py-0.5 rounded border border-emerald-200">{p.proofFileKey}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -880,6 +1363,283 @@ export default function CaseDetailModal({ caseId, onClose, onCaseUpdated }: Case
                     type="button"
                     onClick={() => setOverrideModalOpen(false)}
                     className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* DIALOG 1: Human-in-the-Loop Officer Sign-Off Dialog */}
+        {selectedSignOffCase && (
+          <div className="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-white rounded-3xl p-6 space-y-4 shadow-2xl">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                  <UserCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Officer Sign-Off (Case Linkage)</span>
+                </div>
+                <button onClick={() => setSelectedSignOffCase(null)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-950">
+                You are explicitly affirming that <strong>{selectedSignOffCase.title}</strong> is correlated to this case by verified common actors, modus operandi, or corroborating physical/electronic proof.
+              </div>
+
+              <form onSubmit={handleSignOffCorrelation} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Officer Badge / ID Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={officerBadge}
+                    onChange={(e) => setOfficerBadge(e.target.value)}
+                    placeholder="e.g. POL-KA-4491 or SEC-OFFICER-07"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Investigative Corroboration Notes <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={officerSignOffNotes}
+                    onChange={(e) => setOfficerSignOffNotes(e.target.value)}
+                    placeholder="Document basis for linking: e.g. same Instagram burner handle identified across both victim complaints..."
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={submittingSignOff || !officerBadge.trim() || !officerSignOffNotes.trim()}
+                    className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                  >
+                    {submittingSignOff ? 'Recording Sign-Off...' : 'Confirm Explicit Officer Sign-Off'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSignOffCase(null)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* DIALOG 2: Submit for Supervisor Approval */}
+        {showSubmitApprovalModal && (
+          <div className="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-white rounded-3xl p-6 space-y-4 shadow-2xl">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                  <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                  <span>Submit Proposed Resolution to Supervisor</span>
+                </div>
+                <button onClick={() => setShowSubmitApprovalModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Submits the case findings and proposed disciplinary/legal action for superior review. The case state transitions to <strong>FLAGGED_REVIEW</strong>.
+              </p>
+
+              <form onSubmit={handleSubmitForApproval} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Proposed Redressal / Disciplinary Action <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={proposedAction}
+                    onChange={(e) => setProposedAction(e.target.value)}
+                    placeholder="e.g. Issue formal warning, institute anti-ragging squad hearing, suspension from hostel..."
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Recommended Case Disposition / Legal Finding <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={proposedDecision}
+                    onChange={(e) => setProposedDecision(e.target.value)}
+                    placeholder="e.g. Substantiated breach under UGC Anti-Ragging Regulation 6.1"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={submittingApproval || !proposedAction.trim() || !proposedDecision.trim()}
+                    className="flex-1 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                  >
+                    {submittingApproval ? 'Submitting...' : 'Submit to Supervisor'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSubmitApprovalModal(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* DIALOG 3: Supervisor QC Decision */}
+        {showSupervisorDecideModal && (
+          <div className="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-white rounded-3xl p-6 space-y-4 shadow-2xl">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                  <Scale className="w-4 h-4 text-indigo-600" />
+                  <span>Superior Officer Legal & QC Decision</span>
+                </div>
+                <button onClick={() => setShowSupervisorDecideModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSupervisorDecide} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Supervisor Decision</label>
+                  <select
+                    value={supervisorDecision}
+                    onChange={(e) => setSupervisorDecision(e.target.value as any)}
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-300 font-semibold"
+                  >
+                    <option value="APPROVE">APPROVE Resolution (Case marked RESOLVED)</option>
+                    <option value="REQUEST_REVISION">REQUEST REVISION (Returned to IN_PROGRESS)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Quality Control & Legal Validation Notes <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={supervisorNotes}
+                    onChange={(e) => setSupervisorNotes(e.target.value)}
+                    placeholder="Validate that due process, witness testimonies, and statutory protections were satisfied..."
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={submittingSupervisorDecision}
+                    className="flex-1 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                  >
+                    {submittingSupervisorDecision ? 'Recording Decision...' : 'Record Supervisor Decision'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSupervisorDecideModal(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* DIALOG 4: Record Official Action Taken & Upload Proof */}
+        {showActionTakenModal && (
+          <div className="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-lg bg-white rounded-3xl p-6 space-y-4 shadow-2xl">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                  <FileCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Record Official Action Taken & Proof</span>
+                </div>
+                <button onClick={() => setShowActionTakenModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Finalizes and publishes the official Action Taken Report (ATR) visible on the victim's tracking portal. Marks the case as <strong>RESOLVED</strong>.
+              </p>
+
+              <form onSubmit={handleRecordActionTaken} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Action Taken by Authority / Police <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={actionTakenText}
+                    onChange={(e) => setActionTakenText(e.target.value)}
+                    placeholder="Specify sanctions, police referral, committee orders, counseling mandates..."
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Proof File Key / Certified Document Reference <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={proofFileKey}
+                    onChange={(e) => setProofFileKey(e.target.value)}
+                    placeholder="evidence/disciplinary-order-signed-2026.pdf"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Victim Resolution & Redressal Summary <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={resolutionSummary}
+                    onChange={(e) => setResolutionSummary(e.target.value)}
+                    placeholder="Summary visible to complainant confirming safety arrangements or institutional support..."
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={submittingActionTaken || !actionTakenText.trim()}
+                    className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                  >
+                    {submittingActionTaken ? 'Publishing ATR...' : 'Publish Official Action Taken'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowActionTakenModal(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
                   >
                     Cancel
                   </button>

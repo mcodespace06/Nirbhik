@@ -1,6 +1,22 @@
 import { z } from 'zod';
 import { ComplaintMode, TargetEntityType } from '@prisma/client';
 
+export const AccusedRoleEnum = z.enum([
+  'PRIMARY_ACCUSED',
+  'ACCOMPLICE',
+  'WITNESS',
+  'INSTIGATOR',
+  'BYSTANDER',
+]);
+
+export const AccusedPersonSchema = z.object({
+  name: z.string().min(1, 'Name of person is required'),
+  role: AccusedRoleEnum.default('PRIMARY_ACCUSED'),
+  image: z.string().optional(),
+  onlineHandles: z.record(z.string()).or(z.string()).optional(),
+  proof: z.string().optional(),
+});
+
 export const CreateComplaintSchema = z.object({
   title: z
     .string()
@@ -16,6 +32,8 @@ export const CreateComplaintSchema = z.object({
   mode: z.nativeEnum(ComplaintMode).default(ComplaintMode.CONFIDENTIAL),
   targetEntityType: z.nativeEnum(TargetEntityType).optional(),
   targetEntityLabel: z.string().max(100).optional(),
+  accusedList: z.array(AccusedPersonSchema).optional(),
+  firDraft: z.string().optional(),
   attachments: z
     .array(
       z.object({

@@ -18,11 +18,66 @@ import {
 import { UserStatus, Role } from '@prisma/client';
 import { recordAuditLog } from '../services/audit/audit.service';
 
+import { sendAadhaarOtp, verifyAadhaarOtp, vaultVictimProfile } from '../services/auth/aadhaar';
+
 const router = Router();
 
 // Rate limiting on sensitive auth endpoints
 const authLimiter = rateLimiter({ maxRequests: 10, windowMs: 60 * 1000, keyPrefix: 'auth' });
 const otpLimiter = rateLimiter({ maxRequests: 5, windowMs: 60 * 1000, keyPrefix: 'otp' });
+
+/**
+ * POST /api/auth/aadhaar/send-otp
+ * Initiates UIDAI OTP verification for Victim Profiling
+ */
+router.post('/aadhaar/send-otp', otpLimiter, async (req: Request, res: Response) => {
+  const { aadhaarNumber, phoneOrEmail } = req.body;
+  if (!aadhaarNumber || !phoneOrEmail) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: '12-digit Aadhaar number and registered mobile/email are required.' },
+    });
+  }
+
+  try {
+    const result = await sendAadhaarOtp(aadhaarNumber, phoneOrEmail);
+    return res.status(200).json({
+      message: `Verification OTP dispatched to registered contact ${result.maskedRecipient}`,
+      sessionId: result.sessionId,
+      maskedRecipient: result.maskedRecipient,
+      ...(result.devOtp && { devOtp: result.devOtp }),
+    });
+  } catch (err: any) {
+    return res.status(400).json({
+      error: { code: 'AADHAAR_ERROR', message: err.message },
+    });
+  }
+});
+
+/**
+ * POST /api/auth/aadhaar/verify-otp
+ * Verifies UIDAI OTP and issues cryptographic verification token
+ */
+router.post('/aadhaar/verify-otp', otpLimiter, async (req: Request, res: Response) => {
+  const { sessionId, otp } = req.body;
+  if (!sessionId || !otp) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Session ID and 6-digit OTP code are required.' },
+    });
+  }
+
+  try {
+    const result = verifyAadhaarOtp(sessionId, otp);
+    return res.status(200).json({
+      message: 'Aadhaar identity successfully authenticated (UIDAI Simulation).',
+      aadhaarLast4: result.aadhaarLast4,
+      verificationToken: result.verificationToken,
+    });
+  } catch (err: any) {
+    return res.status(400).json({
+      error: { code: 'VERIFICATION_FAILED', message: err.message },
+    });
+  }
+});
 
 /**
  * POST /api/auth/register
@@ -84,6 +139,18 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
       },
     });
 
+    // Vault encrypted confidential profiling details if provided (Section 1)
+    if (req.body.legalName || req.body.phone || req.body.address || req.body.aadhaarNumber) {
+      vaultVictimProfile(user.id, {
+        legalName: req.body.legalName || username,
+        phone: req.body.phone || '',
+        email: collegeEmail,
+        address: req.body.address || '',
+        aadhaarNumber: req.body.aadhaarNumber,
+        verificationToken: req.body.aadhaarToken,
+      });
+    }
+
     const otp = generateOTP();
     const otpHash = hashOTP(otp);
     const otpExpires = getOTPExpiry(10);
@@ -121,6 +188,17 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
         status: UserStatus.PENDING_VERIFY,
       },
     });
+
+    if (req.body.legalName || req.body.phone || req.body.address || req.body.aadhaarNumber) {
+      vaultVictimProfile(user.id, {
+        legalName: req.body.legalName || username,
+        phone: req.body.phone || '',
+        email: collegeEmail,
+        address: req.body.address || '',
+        aadhaarNumber: req.body.aadhaarNumber,
+        verificationToken: req.body.aadhaarToken,
+      });
+    }
 
     await prisma.verificationRequest.create({
       data: {

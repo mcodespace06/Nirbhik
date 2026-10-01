@@ -18,7 +18,8 @@ import {
   Sparkles,
   ShieldAlert,
   Radio,
-  BarChart2
+  BarChart2,
+  Scale
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/public/Login';
@@ -33,15 +34,22 @@ import TransparencyReport from './pages/public/TransparencyReport';
 import PolicyAssistantDrawer from './components/assistant/PolicyAssistantDrawer';
 import SosEmergencyModal from './components/sos/SosEmergencyModal';
 import NotificationCenter from './components/notifications/NotificationCenter';
+import AiCaseAnalyzer from './components/assistant/AiCaseAnalyzer';
 
 function MainApp() {
   const { user, logout } = useAuth();
   const [healthStatus, setHealthStatus] = useState<{ status: string; database?: string } | null>(null);
   const [authModal, setAuthModal] = useState<'LOGIN' | 'REGISTER' | null>(null);
 
-  // App Page View State: 'HOME' | 'NEW_COMPLAINT' | 'TRACK' | 'MY_COMPLAINTS' | 'ADMIN' | 'RULES' | 'SECURITY' | 'TRANSPARENCY'
-  const [currentView, setCurrentView] = useState<'HOME' | 'NEW_COMPLAINT' | 'TRACK' | 'MY_COMPLAINTS' | 'ADMIN' | 'RULES' | 'SECURITY' | 'TRANSPARENCY'>('HOME');
+  // App Page View State: 'HOME' | 'NEW_COMPLAINT' | 'TRACK' | 'MY_COMPLAINTS' | 'ADMIN' | 'RULES' | 'SECURITY' | 'TRANSPARENCY' | 'AI_ANALYZER'
+  const [currentView, setCurrentView] = useState<'HOME' | 'NEW_COMPLAINT' | 'TRACK' | 'MY_COMPLAINTS' | 'ADMIN' | 'RULES' | 'SECURITY' | 'TRANSPARENCY' | 'AI_ANALYZER'>('HOME');
   const [trackKeyParam, setTrackKeyParam] = useState<string>('');
+  const [prefillComplaintData, setPrefillComplaintData] = useState<{
+    title?: string;
+    story?: string;
+    firDraft?: string;
+    suggestedCategory?: string;
+  } | null>(null);
 
   // SOS Emergency Modal State
   const [isSosModalOpen, setIsSosModalOpen] = useState(false);
@@ -136,6 +144,18 @@ function MainApp() {
             >
               <Search className="w-4 h-4" />
               <span className="hidden sm:inline">Track Complaint</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentView('AI_ANALYZER')}
+              className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs sm:text-sm ${
+                currentView === 'AI_ANALYZER'
+                  ? 'bg-purple-50 text-purple-700 font-bold'
+                  : 'text-slate-600 hover:text-purple-700'
+              }`}
+            >
+              <Scale className="w-4 h-4 text-purple-600" />
+              <span className="hidden sm:inline">AI Legal Triage</span>
             </button>
 
             <button
@@ -245,10 +265,29 @@ function MainApp() {
 
       {/* Main Body Routing */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
+        {currentView === 'AI_ANALYZER' && (
+          <div className="py-2">
+            <AiCaseAnalyzer
+              onStartComplaintWithFir={(data) => {
+                setPrefillComplaintData(data);
+                setCurrentView('NEW_COMPLAINT');
+              }}
+              onClose={() => setCurrentView('HOME')}
+            />
+          </div>
+        )}
+
         {currentView === 'NEW_COMPLAINT' && (
           <NewComplaint
-            onBack={() => setCurrentView('HOME')}
-            onTrackKey={(key) => handleTrackKey(key)}
+            onBack={() => {
+              setPrefillComplaintData(null);
+              setCurrentView('HOME');
+            }}
+            onTrackKey={(key) => {
+              setPrefillComplaintData(null);
+              handleTrackKey(key);
+            }}
+            initialData={prefillComplaintData}
           />
         )}
 
@@ -354,7 +393,7 @@ function MainApp() {
               )}
 
               {/* Quick Action Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 text-left">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 text-left">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
                   <div className="w-12 h-12 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center mb-4">
                     <Shield className="w-6 h-6" />
@@ -368,6 +407,23 @@ function MainApp() {
                     className="inline-flex items-center gap-1.5 text-sm font-bold text-sky-700 group-hover:text-sky-800"
                   >
                     Start Report <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+
+                <div className="bg-purple-50 p-6 rounded-2xl border border-purple-200 shadow-sm hover:shadow-md transition-shadow group">
+                  <div className="w-12 h-12 rounded-xl bg-purple-600 text-white flex items-center justify-center mb-4">
+                    <Scale className="w-6 h-6" />
+                  </div>
+                  <h2 className="text-lg font-bold text-purple-900 mb-1">AI Legal Triage</h2>
+                  <p className="text-sm text-purple-700 mb-5">
+                    Consult Indian Law AI engine (BNS, UGC, POSH) and draft an automated FIR.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('AI_ANALYZER')}
+                    className="inline-flex items-center gap-1.5 text-sm font-bold text-purple-700 group-hover:text-purple-900"
+                  >
+                    Start Legal Consult <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </div>
 

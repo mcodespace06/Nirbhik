@@ -12,7 +12,13 @@ import {
   MessageSquare,
   Send,
   Lock,
-  Info
+  Info,
+  Download,
+  CheckCircle2,
+  Scale,
+  PlusCircle,
+  History,
+  X
 } from 'lucide-react';
 
 interface EventItem {
@@ -71,6 +77,29 @@ export default function TrackComplaint({ initialKey = '', onBack }: TrackComplai
   const [sendingMessage, setSendingMessage] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
+  // Phase 4: Mid-Investigation Amendment (Append-Only Log)
+  const [showAmendmentModal, setShowAmendmentModal] = useState(false);
+  const [amendmentContent, setAmendmentContent] = useState('');
+  const [amendmentFileKey, setAmendmentFileKey] = useState('');
+  const [submittingAmendment, setSubmittingAmendment] = useState(false);
+
+  // Phase 4: Formal Escalation / Appeal
+  const [showEscalateModal, setShowEscalateModal] = useState(false);
+  const [escalateReason, setEscalateReason] = useState('');
+  const [desiredRelief, setDesiredRelief] = useState('');
+  const [submittingEscalate, setSubmittingEscalate] = useState(false);
+
+  // Phase 4: Reactivate Case
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [reactivateReason, setReactivateReason] = useState('');
+  const [newEvidenceText, setNewEvidenceText] = useState('');
+  const [submittingReactivate, setSubmittingReactivate] = useState(false);
+
+  // Phase 4: Case Dossier Export
+  const [showDossierModal, setShowDossierModal] = useState(false);
+  const [dossierData, setDossierData] = useState<any | null>(null);
+  const [loadingDossier, setLoadingDossier] = useState(false);
+
   const fetchCase = async (searchKey: string) => {
     if (!searchKey) return;
     setError(null);
@@ -107,6 +136,113 @@ export default function TrackComplaint({ initialKey = '', onBack }: TrackComplai
       setMessages([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddAmendment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!amendmentContent.trim() || !keyInput) return;
+    setSubmittingAmendment(true);
+    try {
+      const cleanKey = keyInput.trim().toUpperCase();
+      const res = await fetch(`/api/track/${cleanKey}/amendments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: amendmentContent.trim(),
+          attachments: amendmentFileKey.trim()
+            ? [{ fileKey: amendmentFileKey.trim(), mime: 'application/octet-stream', size: 1024 }]
+            : undefined,
+        }),
+      });
+      if (res.ok) {
+        setAmendmentContent('');
+        setAmendmentFileKey('');
+        setShowAmendmentModal(false);
+        fetchCase(cleanKey);
+      } else {
+        const data = await res.json();
+        alert(data.error?.message || 'Failed to append amendment.');
+      }
+    } finally {
+      setSubmittingAmendment(false);
+    }
+  };
+
+  const handleEscalate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!escalateReason.trim() || !keyInput) return;
+    setSubmittingEscalate(true);
+    try {
+      const cleanKey = keyInput.trim().toUpperCase();
+      const res = await fetch(`/api/track/${cleanKey}/escalate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appealReason: escalateReason.trim(),
+          desiredRelief: desiredRelief.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        setShowEscalateModal(false);
+        setEscalateReason('');
+        setDesiredRelief('');
+        fetchCase(cleanKey);
+        alert('Formal Escalation/Appeal submitted for Higher-Level Authority Review.');
+      } else {
+        const data = await res.json();
+        alert(data.error?.message || 'Failed to file appeal.');
+      }
+    } finally {
+      setSubmittingEscalate(false);
+    }
+  };
+
+  const handleReactivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reactivateReason.trim() || !keyInput) return;
+    setSubmittingReactivate(true);
+    try {
+      const cleanKey = keyInput.trim().toUpperCase();
+      const res = await fetch(`/api/track/${cleanKey}/reactivate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reactivationReason: reactivateReason.trim(),
+          newEvidence: newEvidenceText.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        setShowReactivateModal(false);
+        setReactivateReason('');
+        setNewEvidenceText('');
+        fetchCase(cleanKey);
+        alert('Case successfully reactivated with new evidence.');
+      } else {
+        const data = await res.json();
+        alert(data.error?.message || 'Failed to reactivate case.');
+      }
+    } finally {
+      setSubmittingReactivate(false);
+    }
+  };
+
+  const handleExportDossier = async () => {
+    if (!keyInput) return;
+    setLoadingDossier(true);
+    try {
+      const cleanKey = keyInput.trim().toUpperCase();
+      const res = await fetch(`/api/track/${cleanKey}/dossier`);
+      if (res.ok) {
+        const data = await res.json();
+        setDossierData(data.dossier);
+        setShowDossierModal(true);
+      } else {
+        const data = await res.json();
+        alert(data.error?.message || 'Failed to load case dossier.');
+      }
+    } finally {
+      setLoadingDossier(false);
     }
   };
 
@@ -326,6 +462,124 @@ export default function TrackComplaint({ initialKey = '', onBack }: TrackComplai
               </div>
             </div>
 
+            {/* Phase 4: Mid-Investigation Update CTA (For active cases) */}
+            {complaint.status !== 'RESOLVED' && complaint.status !== 'CLOSED' && complaint.status !== 'REJECTED' && (
+              <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-sky-900">
+                    <History className="w-4 h-4 text-sky-700" />
+                    <span>Mid-Investigation Update (Append-Only Log)</span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Have new facts or evidence emerged? You can append versioned updates (v1.1, v1.2) while keeping the original report unaltered.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAmendmentModal(true)}
+                  className="px-3.5 py-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors shrink-0"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Add Case Update</span>
+                </button>
+              </div>
+            )}
+
+            {/* Phase 4: Official Action Taken & Resolution Card (For resolved cases) */}
+            {(complaint.status === 'RESOLVED' || events.some((e) => e.type === 'ACTION_TAKEN_RECORDED')) && (
+              <div className="mb-6 p-5 rounded-2xl bg-emerald-50 border-2 border-emerald-300 space-y-4 shadow-sm animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b border-emerald-200 pb-3">
+                  <div className="flex items-center gap-2 text-emerald-950 font-bold text-sm">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <span>Official Police & Authority Action Taken</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-200 text-emerald-900">
+                    Case Concluded
+                  </span>
+                </div>
+
+                {(() => {
+                  const actionEv = events.find((e) => e.type === 'ACTION_TAKEN_RECORDED');
+                  const p = actionEv?.payload || {};
+                  return (
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <span className="font-bold text-emerald-900 block mb-0.5">Summary of Action Taken:</span>
+                        <p className="text-slate-800 bg-white/90 p-3 rounded-xl border border-emerald-200 leading-relaxed font-medium">
+                          {p.actionTaken || 'Investigation completed and certified disciplinary/legal action has been enforced.'}
+                        </p>
+                      </div>
+
+                      {p.resolutionSummary && (
+                        <div>
+                          <span className="font-bold text-emerald-900 block mb-0.5">Institutional Resolution Notes:</span>
+                          <p className="text-slate-700 bg-white/80 p-3 rounded-xl border border-emerald-100 leading-relaxed">
+                            {p.resolutionSummary}
+                          </p>
+                        </div>
+                      )}
+
+                      {p.proofFileKey && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="text-slate-600 font-semibold">Proof of Action Taken:</span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white border border-emerald-300 text-emerald-800 font-mono text-[11px] font-bold">
+                            <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                            {p.proofFileKey}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Satisfaction & Escalation Panel */}
+                <div className="pt-3 border-t border-emerald-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <strong className="text-xs text-slate-800 block">Are you satisfied with this decision?</strong>
+                    <span className="text-[11px] text-slate-500">
+                      Download full certified audit documents or file a formal escalation for higher review.
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleExportDossier}
+                      disabled={loadingDossier}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors"
+                    >
+                      {loadingDossier ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                      <span>Export Case Dossier</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowEscalateModal(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors"
+                    >
+                      <Scale className="w-3.5 h-3.5" />
+                      <span>File Formal Appeal / Escalate</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Reactivate Case Button (For Closed/Resolved cases) */}
+            {(complaint.status === 'RESOLVED' || complaint.status === 'CLOSED' || complaint.status === 'REJECTED') && (
+              <div className="mb-6 p-4 rounded-2xl bg-slate-50 border border-slate-200 flex justify-between items-center text-xs">
+                <span className="text-slate-600 font-medium">
+                  Has new, critical evidence emerged after case resolution?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowReactivateModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center gap-1.5 transition-colors"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>Reactivate Case</span>
+                </button>
+              </div>
+            )}
+
             {/* Navigation Tabs between Overview and Anonymous Chat */}
             <div className="flex border-b border-slate-200 mb-6">
               <button
@@ -348,7 +602,7 @@ export default function TrackComplaint({ initialKey = '', onBack }: TrackComplai
                 }`}
               >
                 <MessageSquare className="w-4 h-4" />
-                <span>Anonymous Chat with Staff</span>
+                <span>Secure Victim-Police Chat</span>
                 {messages.length > 0 && (
                   <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 text-[11px] font-bold">
                     {messages.length}
@@ -381,7 +635,7 @@ export default function TrackComplaint({ initialKey = '', onBack }: TrackComplai
 
                 {/* Description */}
                 <div>
-                  <span className="text-xs font-bold text-slate-700 block mb-2">Reported Incident Description</span>
+                  <span className="text-xs font-bold text-slate-700 block mb-2">Original Reported Incident Narrative</span>
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
                     {complaint.description}
                   </div>
@@ -409,31 +663,81 @@ export default function TrackComplaint({ initialKey = '', onBack }: TrackComplai
                 <div className="pt-4 border-t border-slate-100">
                   <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
                     <Clock className="w-4 h-4 text-sky-700" />
-                    Audit Timeline of Case Events
+                    Audit Timeline & Append-Only Log
                   </h3>
 
                   {events.length === 0 ? (
                     <p className="text-xs text-slate-500">No events recorded yet.</p>
                   ) : (
                     <div className="relative border-l-2 border-slate-200 ml-4 space-y-5 pb-2">
-                      {events.map((ev) => (
-                        <div key={ev.id} className="relative pl-6">
-                          <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-sky-600 border-2 border-white ring-4 ring-sky-100" />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-900">{ev.type}</span>
-                              {ev.actorRole && (
-                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 uppercase">
-                                  By {ev.actorRole}
-                                </span>
+                      {events.map((ev) => {
+                        const isAmendment = ev.type === 'AMENDMENT_APPENDED';
+                        const isActionTaken = ev.type === 'ACTION_TAKEN_RECORDED';
+                        const isEscalation = ev.type === 'ESCALATION_SUBMITTED';
+                        const isReactivation = ev.type === 'CASE_REACTIVATED';
+                        const isSignOff = ev.type === 'OFFICER_SIGNOFF_LINKED';
+
+                        return (
+                          <div key={ev.id} className="relative pl-6">
+                            <span className={`absolute -left-[9px] top-1 w-4 h-4 rounded-full border-2 border-white ring-4 ${
+                              isActionTaken ? 'bg-emerald-600 ring-emerald-100' :
+                              isEscalation ? 'bg-amber-600 ring-amber-100' :
+                              isAmendment ? 'bg-indigo-600 ring-indigo-100' :
+                              'bg-sky-600 ring-sky-100'
+                            }`} />
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-bold text-slate-900">{ev.type}</span>
+                                {isAmendment && ev.payload?.version && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                                    Version {ev.payload.version}
+                                  </span>
+                                )}
+                                {ev.actorRole && (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 uppercase">
+                                    By {ev.actorRole}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Payload Specific Snippet */}
+                              {isAmendment && ev.payload?.content && (
+                                <div className="text-xs text-indigo-950 bg-indigo-50/60 p-2.5 rounded-xl border border-indigo-200 font-medium">
+                                  {ev.payload.content}
+                                </div>
                               )}
+
+                              {isActionTaken && ev.payload?.actionTaken && (
+                                <div className="text-xs text-emerald-950 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 font-medium">
+                                  {ev.payload.actionTaken}
+                                </div>
+                              )}
+
+                              {isEscalation && ev.payload?.appealReason && (
+                                <div className="text-xs text-amber-950 bg-amber-50 p-2.5 rounded-xl border border-amber-200 font-medium">
+                                  Appeal Ground: {ev.payload.appealReason}
+                                </div>
+                              )}
+
+                              {isReactivation && ev.payload?.reactivationReason && (
+                                <div className="text-xs text-orange-950 bg-orange-50 p-2.5 rounded-xl border border-orange-200 font-medium">
+                                  Reactivation Reason: {ev.payload.reactivationReason}
+                                </div>
+                              )}
+
+                              {isSignOff && ev.payload?.officerBadge && (
+                                <div className="text-xs text-slate-800 bg-slate-100 p-2 rounded-lg border border-slate-200">
+                                  Officer Sign-Off (Badge #{ev.payload.officerBadge}) - Linked Case #{ev.payload.targetCaseId}
+                                </div>
+                              )}
+
+                              <span className="text-[11px] text-slate-400 block mt-0.5">
+                                {new Date(ev.createdAt).toLocaleString()}
+                              </span>
                             </div>
-                            <span className="text-[11px] text-slate-400 block mt-0.5">
-                              {new Date(ev.createdAt).toLocaleString()}
-                            </span>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -443,8 +747,16 @@ export default function TrackComplaint({ initialKey = '', onBack }: TrackComplai
             {/* Tab 2: CHAT */}
             {activeTab === 'CHAT' && (
               <div className="space-y-4 animate-in fade-in duration-150">
-                <div className="p-3 bg-sky-50 rounded-2xl border border-sky-100 flex items-center gap-2 text-xs text-sky-800">
-                  <Lock className="w-4 h-4 text-sky-600 shrink-0" />
+                {/* Legal Evidentiary Watermark Notice */}
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 flex items-start gap-2.5 text-xs text-amber-950">
+                  <Scale className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed">
+                    <strong>Official Evidentiary Admissibility Notice:</strong> All victim-police messages in this channel are cryptographically timestamped and officially logged into the case evidence vault. Statements made here are legally admissible as formal case proceedings.
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-sky-50 rounded-xl border border-sky-100 flex items-center gap-2 text-xs text-sky-800">
+                  <Lock className="w-3.5 h-3.5 text-sky-600 shrink-0" />
                   <span>
                     Your chat is end-to-end pseudonymous. Handlers only see your pseudonym <strong>{complaint.pseudonym}</strong>.
                   </span>
@@ -518,6 +830,314 @@ export default function TrackComplaint({ initialKey = '', onBack }: TrackComplai
                 </form>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: Mid-Investigation Amendment (Append-Only Log) */}
+      {showAmendmentModal && (
+        <div className="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <History className="w-4 h-4 text-sky-600" />
+                <span>Append Mid-Investigation Update</span>
+              </div>
+              <button onClick={() => setShowAmendmentModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              The original complaint is legally immutable. This update will be logged as an official append-only version (e.g., v1.1) in the audit timeline.
+            </p>
+            <form onSubmit={handleAddAmendment} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Additional Narrative / Clarification <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={amendmentContent}
+                  onChange={(e) => setAmendmentContent(e.target.value)}
+                  placeholder="Detail the new facts, additional threats, or witness clarifications..."
+                  className="w-full p-3 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  New Evidence Reference / File Key <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={amendmentFileKey}
+                  onChange={(e) => setAmendmentFileKey(e.target.value)}
+                  placeholder="evidence/new-screenshot-02.png"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={submittingAmendment || !amendmentContent.trim()}
+                  className="flex-1 py-2.5 bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                >
+                  {submittingAmendment ? 'Appending Log...' : 'Submit Versioned Amendment'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAmendmentModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Formal Escalation / Appeal */}
+      {showEscalateModal && (
+        <div className="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <Scale className="w-4 h-4 text-amber-600" />
+                <span>File Formal Appeal / Escalation</span>
+              </div>
+              <button onClick={() => setShowEscalateModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              If you believe the police/committee decision was biased, incomplete, or procedurally flawed, this triggers a high-priority risk alert for Superior Officer review.
+            </p>
+            <form onSubmit={handleEscalate} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Grounds for Appeal / Disagreement <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={escalateReason}
+                  onChange={(e) => setEscalateReason(e.target.value)}
+                  placeholder="Explain why the current outcome is unsatisfactory and what was overlooked..."
+                  className="w-full p-3 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Desired Relief / Resolution Sought <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={desiredRelief}
+                  onChange={(e) => setDesiredRelief(e.target.value)}
+                  placeholder="e.g. Hosteller reassignment, police FIR filing, disciplinary rustication"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={submittingEscalate || !escalateReason.trim()}
+                  className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                >
+                  {submittingEscalate ? 'Submitting Appeal...' : 'Submit Formal Appeal'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEscalateModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: Reactivate Case */}
+      {showReactivateModal && (
+        <div className="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <History className="w-4 h-4 text-orange-600" />
+                <span>Reactivate Case with New Evidence</span>
+              </div>
+              <button onClick={() => setShowReactivateModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Reopening a closed matter moves the lifecycle back to <strong>IN_PROGRESS</strong> and re-alerts the investigative supervisor.
+            </p>
+            <form onSubmit={handleReactivate} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Reason for Reactivation <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={reactivateReason}
+                  onChange={(e) => setReactivateReason(e.target.value)}
+                  placeholder="Why should this case be reopened? State any ongoing harassment or recurring incident..."
+                  className="w-full p-3 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Description of New Critical Evidence <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={newEvidenceText}
+                  onChange={(e) => setNewEvidenceText(e.target.value)}
+                  placeholder="New CCTV footage timestamp, audio recording, witness testimony..."
+                  className="w-full p-3 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={submittingReactivate || !reactivateReason.trim()}
+                  className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                >
+                  {submittingReactivate ? 'Reopening...' : 'Confirm Reactivation'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowReactivateModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Full Case Dossier Export Modal */}
+      {showDossierModal && dossierData && (
+        <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="relative w-full max-w-3xl bg-white rounded-3xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto shadow-2xl space-y-6">
+            <div className="flex justify-between items-start border-b border-slate-200 pb-4">
+              <div>
+                <div className="flex items-center gap-2 text-sky-700 font-bold text-xs uppercase tracking-wider mb-1">
+                  <Shield className="w-4 h-4" />
+                  <span>Certified Investigation Dossier Pack</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900">{dossierData.title}</h2>
+                <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 font-mono">
+                  <span>Key: {keyInput}</span>
+                  <span>• Pseudonym: {dossierData.pseudonym}</span>
+                  <span>• Certified At: {new Date(dossierData.certifiedAt).toLocaleString()}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDossierModal(false)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Case Overview */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px] block">Incident Summary</span>
+              <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">{dossierData.description}</p>
+            </div>
+
+            {/* AI Drafted FIR if present */}
+            {dossierData.firDraft && (
+              <div className="p-4 rounded-2xl bg-slate-900 text-slate-100 border border-slate-800 space-y-2 text-xs">
+                <span className="font-bold text-sky-400 uppercase tracking-wider text-[10px] block">
+                  Automated Structured FIR (BNSS §173 / CrPC §154)
+                </span>
+                <pre className="font-mono text-xs whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto text-slate-300">
+                  {dossierData.firDraft}
+                </pre>
+              </div>
+            )}
+
+            {/* Accused Roster */}
+            {dossierData.accusedList && dossierData.accusedList.length > 0 && (
+              <div className="space-y-2">
+                <span className="font-bold text-xs uppercase tracking-wider text-slate-700 block">
+                  Identified Accused / Associated Entities ({dossierData.accusedList.length})
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {dossierData.accusedList.map((acc: any, i: number) => (
+                    <div key={i} className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                      <div className="flex justify-between items-center mb-1">
+                        <strong className="text-slate-900 font-bold">{acc.name}</strong>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-100 text-sky-800">
+                          {acc.role}
+                        </span>
+                      </div>
+                      {acc.onlineHandles && (
+                        <div className="text-[11px] text-slate-500 truncate">Handles: {acc.onlineHandles}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Amendments */}
+            {dossierData.amendments && dossierData.amendments.length > 0 && (
+              <div className="space-y-2">
+                <span className="font-bold text-xs uppercase tracking-wider text-slate-700 block">
+                  Mid-Investigation Append-Only Log ({dossierData.amendments.length})
+                </span>
+                <div className="space-y-2">
+                  {dossierData.amendments.map((am: any, i: number) => (
+                    <div key={i} className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-200 text-xs">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-indigo-900 mb-1">
+                        <span>Version {am.version}</span>
+                        <span className="text-slate-400 font-normal">{new Date(am.appendedAt).toLocaleString()}</span>
+                      </div>
+                      <p className="text-slate-800">{am.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Taken Record */}
+            {dossierData.actionTaken && (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-xs space-y-1">
+                <span className="font-bold text-emerald-950 uppercase tracking-wider text-[10px] block">
+                  Official Redressal Action & Outcome
+                </span>
+                <p className="text-emerald-900 font-medium leading-relaxed">{dossierData.actionTaken.actionTaken}</p>
+                {dossierData.actionTaken.proofFileKey && (
+                  <div className="text-[11px] text-emerald-800 pt-1">
+                    Proof Reference: <span className="font-mono font-bold">{dossierData.actionTaken.proofFileKey}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
+              <span className="text-[11px] text-slate-400">
+                Digitally authenticated by CampusVoice Cryptographic Vault
+              </span>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Print / Save as PDF</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

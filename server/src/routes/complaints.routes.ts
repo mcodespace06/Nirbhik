@@ -62,6 +62,8 @@ router.post('/', complaintSubmitLimiter, optionalAuthenticate, async (req: Authe
     targetEntityType,
     targetEntityLabel,
     attachments,
+    accusedList,
+    firDraft,
   } = parseResult.data;
 
   // Confidential mode requires verified authentication
@@ -128,6 +130,8 @@ router.post('/', complaintSubmitLimiter, optionalAuthenticate, async (req: Authe
         payload: {
           mode,
           categoryName: category.name,
+          accusedList: accusedList || [],
+          firDraft: firDraft || null,
         },
       },
     });
@@ -484,4 +488,299 @@ router.get('/track/:key/messages/stream', async (req: Request, res: Response) =>
   chatBus.registerClient(complaint.id, res);
 });
 
+/**
+ * POST /api/track/:key/amendments
+ * Section 4: Mid-Investigation Updates via Append-Only Log (Version Control)
+ * Original complaint remains 100% unaltered for statutory evidentiary integrity.
+ */
+router.post('/track/:key/amendments', async (req: Request, res: Response) => {
+  const { key } = req.params;
+  if (!verifyTrackingKey(key)) {
+    return res.status(400).json({ error: { code: 'INVALID_TRACKING_KEY', message: 'Invalid tracking key.' } });
+  }
+
+  const { statement, attachments } = req.body;
+  if (!statement || typeof statement !== 'string' || statement.trim().length < 5) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Please provide supplementary information (minimum 5 characters).' },
+    });
+  }
+
+  const trackingKeyHash = hashTrackingKey(key);
+  const complaint = await prisma.complaint.findUnique({
+    where: { trackingKeyHash },
+    include: {
+      events: {
+        where: { type: 'AMENDMENT_APPENDED' },
+      },
+    },
+  });
+
+  if (!complaint) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Complaint not found.' } });
+  }
+
+  const versionNumber = `v1.${complaint.events.length + 1}`;
+  const now = new Date().toISOString();
+
+  const amendmentEvent = await prisma.$transaction(async (tx) => {
+    const ev = await tx.complaintEvent.create({
+      data: {
+        complaintId: complaint.id,
+        type: 'AMENDMENT_APPENDED',
+        actorRole: Role.STUDENT,
+        payload: {
+          version: versionNumber,
+          statement: statement.trim(),
+          timestamp: now,
+          attachmentCount: attachments?.length || 0,
+        },
+      },
+    });
+
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      for (const att of attachments) {
+        await tx.attachment.create({
+          data: {
+            complaintId: complaint.id,
+            fileKey: att.fileKey || `amendments/${Date.now()}-${att.name || 'file'}`,
+            mime: att.mime || 'application/octet-stream',
+            size: att.size || 1024,
+            sanitized: true,
+          },
+        });
+      }
+    }
+
+    return ev;
+  });
+
+  chatBus.broadcast(complaint.id, 'amendment_appended', {
+    complaintId: complaint.id,
+    version: versionNumber,
+    statement: statement.trim(),
+    createdAt: now,
+  });
+
+  return res.status(201).json({
+    message: `Supplementary evidence successfully appended to case record as ${versionNumber}. Original complaint remains tamper-evident.`,
+    version: versionNumber,
+    event: amendmentEvent,
+  });
+});
+
+/**
+ * POST /api/track/:key/escalate
+ * Section 4: Formal Escalation & Appeal Workflow for Unsatisfied Victims
+ */
+router.post('/track/:key/escalate', async (req: Request, res: Response) => {
+  const { key } = req.params;
+  if (!verifyTrackingKey(key)) {
+    return res.status(400).json({ error: { code: 'INVALID_TRACKING_KEY', message: 'Invalid tracking key.' } });
+  }
+
+  const { appealReason, groundsForAppeal } = req.body;
+  if (!appealReason || typeof appealReason !== 'string' || appealReason.trim().length < 10) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Please detail grounds for appeal (minimum 10 characters).' },
+    });
+  }
+
+  const trackingKeyHash = hashTrackingKey(key);
+  const complaint = await prisma.complaint.findUnique({
+    where: { trackingKeyHash },
+  });
+
+  if (!complaint) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Complaint not found.' } });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.complaint.update({
+      where: { id: complaint.id },
+      data: { status: ComplaintStatus.ESCALATED },
+    });
+
+    await tx.complaintEvent.create({
+      data: {
+        complaintId: complaint.id,
+        type: 'ESCALATION_TRIGGERED',
+        actorRole: Role.STUDENT,
+        payload: {
+          appealReason: appealReason.trim(),
+          groundsForAppeal: groundsForAppeal || 'Unsatisfied with resolution',
+          escalatedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    // Alert Super Admin / Appellate Oversight
+    await tx.riskAlert.create({
+      data: {
+        type: 'SLA_BREACH',
+        complaintId: complaint.id,
+        message: `Case ${complaint.pseudonym} formally ESCALATED by complainant. Higher review required.`,
+        recommendedActions: ['Convene Appellate Review Committee', 'Re-interview assigned officer', 'Audit case decision'],
+      },
+    });
+  });
+
+  chatBus.broadcast(complaint.id, 'status_change', {
+    complaintId: complaint.id,
+    status: ComplaintStatus.ESCALATED,
+    reason: appealReason,
+  });
+
+  return res.status(200).json({
+    message: 'Appeal officially registered. Case escalated to Higher Oversight Authority.',
+    status: ComplaintStatus.ESCALATED,
+  });
+});
+
+/**
+ * POST /api/track/:key/reactivate
+ * Section 4: Reactivate Closed Case on Fresh Critical Evidence
+ */
+router.post('/track/:key/reactivate', async (req: Request, res: Response) => {
+  const { key } = req.params;
+  if (!verifyTrackingKey(key)) {
+    return res.status(400).json({ error: { code: 'INVALID_TRACKING_KEY', message: 'Invalid tracking key.' } });
+  }
+
+  const { reason, newEvidenceNotes } = req.body;
+  if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Please provide justification and describe new evidence (min 10 chars).' },
+    });
+  }
+
+  const trackingKeyHash = hashTrackingKey(key);
+  const complaint = await prisma.complaint.findUnique({
+    where: { trackingKeyHash },
+  });
+
+  if (!complaint) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Complaint not found.' } });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.complaint.update({
+      where: { id: complaint.id },
+      data: { status: ComplaintStatus.REOPENED },
+    });
+
+    await tx.complaintEvent.create({
+      data: {
+        complaintId: complaint.id,
+        type: 'CASE_REACTIVATED',
+        actorRole: Role.STUDENT,
+        payload: {
+          reason: reason.trim(),
+          newEvidenceNotes: newEvidenceNotes || null,
+          reactivatedAt: new Date().toISOString(),
+        },
+      },
+    });
+  });
+
+  chatBus.broadcast(complaint.id, 'status_change', {
+    complaintId: complaint.id,
+    status: ComplaintStatus.REOPENED,
+    reason,
+  });
+
+  return res.status(200).json({
+    message: 'Case reactivated. Investigators notified of new critical evidence.',
+    status: ComplaintStatus.REOPENED,
+  });
+});
+
+/**
+ * GET /api/track/:key/dossier
+ * Section 4: Export Full Official Case Dossier (Audit Pack for Satisfied Complainant)
+ */
+router.get('/track/:key/dossier', async (req: Request, res: Response) => {
+  const { key } = req.params;
+  if (!verifyTrackingKey(key)) {
+    return res.status(400).json({ error: { code: 'INVALID_TRACKING_KEY', message: 'Invalid tracking key.' } });
+  }
+
+  const trackingKeyHash = hashTrackingKey(key);
+  const complaint = await prisma.complaint.findUnique({
+    where: { trackingKeyHash },
+    include: {
+      category: true,
+      location: true,
+      attachments: true,
+      events: { orderBy: { createdAt: 'asc' } },
+      messages: { orderBy: { createdAt: 'asc' } },
+    },
+  });
+
+  if (!complaint) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Complaint not found.' } });
+  }
+
+  // Extract initial submission payload for accused list and FIR draft
+  const initialSubmitEvent = complaint.events.find((e) => e.type === 'SUBMITTED');
+  const initialPayload: any = initialSubmitEvent?.payload || {};
+
+  const dossier = {
+    metadata: {
+      dossierTitle: `Official Grievance Dossier - Case ${complaint.pseudonym}`,
+      trackingKey: key,
+      generatedAt: new Date().toISOString(),
+      institution: 'Nirbhik Campus Safety & Grievance Redressal System',
+      securityClassification: 'CONFIDENTIAL EVIDENTIARY RECORD',
+    },
+    caseSummary: {
+      id: complaint.id,
+      pseudonym: complaint.pseudonym,
+      title: complaint.title,
+      category: complaint.category.name,
+      location: complaint.location.name,
+      incidentAt: complaint.incidentAt,
+      submittedAt: complaint.createdAt,
+      resolvedAt: complaint.resolvedAt,
+      status: complaint.status,
+      priority: complaint.priority,
+      mode: complaint.mode,
+      outcome: complaint.outcome,
+      outcomeReason: complaint.outcomeReason,
+    },
+    formalFirDraft: initialPayload.firDraft || null,
+    accusedPersons: initialPayload.accusedList || [],
+    originalNarrative: complaint.description,
+    appendOnlyAmendments: complaint.events
+      .filter((e) => e.type === 'AMENDMENT_APPENDED')
+      .map((e) => ({
+        eventId: e.id,
+        createdAt: e.createdAt,
+        payload: e.payload,
+      })),
+    admissibleChatLog: complaint.messages.map((m) => ({
+      id: m.id,
+      sender: m.sender,
+      body: m.body,
+      timestamp: m.createdAt,
+      evidenceNotice: 'Tamper-Evident Admissible Log',
+    })),
+    completeAuditTimeline: complaint.events.map((e) => ({
+      id: e.id,
+      type: e.type,
+      actorRole: e.actorRole,
+      timestamp: e.createdAt,
+      payload: e.payload,
+    })),
+    officialActionTaken: {
+      decision: complaint.outcome || 'IN_PROGRESS',
+      reason: complaint.outcomeReason || 'Investigation active',
+      closedAt: complaint.resolvedAt,
+    },
+  };
+
+  return res.status(200).json({ dossier });
+});
+
 export default router;
+

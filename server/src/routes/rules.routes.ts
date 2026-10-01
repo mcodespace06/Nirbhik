@@ -345,6 +345,38 @@ assistantRouter.post('/chat', aiAssistantLimiter, optionalAuthenticate, async (r
   }
 });
 
+import { consultCase } from '../services/ai/case-analyzer';
+
+/**
+ * POST /api/assistant/case-analyze
+ * Section 2: Conversational victim consultation on Indian Law with triage & FIR generation
+ */
+assistantRouter.post('/case-analyze', aiAssistantLimiter, optionalAuthenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { story, incidentLocation, incidentDate, conversationHistory } = req.body;
+    if (!story || typeof story !== 'string' || story.trim().length < 5) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'Please describe the incident (minimum 5 characters).' },
+      });
+    }
+
+    const result = await consultCase({
+      story: story.trim(),
+      incidentLocation,
+      incidentDate,
+      victimPseudonym: req.user?.username,
+      conversationHistory,
+    });
+
+    return res.status(200).json({
+      disclaimer: 'MANDATORY LEGAL NOTICE: This AI Case Analyzer guidance is for informational and grievance-structuring purposes only and does not constitute certified legal counsel or formal police acceptance.',
+      ...result,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: { code: 'SERVER_ERROR', message: error.message } });
+  }
+});
+
 /**
  * GET /api/assistant/sessions
  * List past assistant sessions for authenticated user
