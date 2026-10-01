@@ -33,18 +33,31 @@ async function getTransporter(): Promise<nodemailer.Transporter> {
 
   // 1. If explicit SMTP credentials are provided, use real configured SMTP transport
   if (smtpHost && smtpUser && smtpPass) {
-    transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
+    const cleanPass = smtpPass.replace(/\s+/g, '');
+    const isGmail = smtpHost.includes('gmail') || smtpUser.endsWith('@gmail.com');
+
+    transporter = nodemailer.createTransport(
+      isGmail
+        ? {
+            service: 'gmail',
+            auth: {
+              user: smtpUser,
+              pass: cleanPass,
+            },
+          }
+        : {
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: {
+              user: smtpUser,
+              pass: cleanPass,
+            },
+            tls: {
+              rejectUnauthorized: false,
+            },
+          }
+    );
     return transporter;
   }
 
@@ -86,7 +99,10 @@ async function getTransporter(): Promise<nodemailer.Transporter> {
  * Sends a real email via active SMTP transporter or live Ethereal test inbox
  */
 export async function sendEmail({ to, subject, text, html }: SendMailOptions): Promise<boolean> {
-  const mailFrom = process.env.MAIL_FROM || 'noreply@campusvoice.local';
+  const defaultFrom = process.env.SMTP_USER
+    ? `"CampusVoice Alerts" <${process.env.SMTP_USER}>`
+    : 'noreply@campusvoice.local';
+  const mailFrom = process.env.MAIL_FROM || defaultFrom;
   const match = text.match(/\b\d{6}\b/);
   const otpCode = match ? match[0] : undefined;
 
