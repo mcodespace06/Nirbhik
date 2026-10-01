@@ -83,6 +83,7 @@ import notificationsRoutes from './routes/notifications.routes';
 import transparencyRoutes from './routes/transparency.routes';
 import auditRoutes from './routes/audit.routes';
 import revealRoutes from './routes/reveal.routes';
+import { webhooksRouter } from './routes/webhooks.routes';
 
 // API Route Mounts
 app.use('/api/auth', authRoutes);
@@ -99,6 +100,7 @@ app.use('/api/sos', sosRouter);
 app.use('/api/security/sos', securityRouter);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/transparency', transparencyRoutes);
+app.use('/api/webhooks', webhooksRouter);
 app.use('/api', complaintsRoutes); // Allows /api/track/:key as specified in ARCHITECTURE.md §7
 
 // Standardized 404 handler

@@ -43,8 +43,12 @@ export function csrfProtection() {
       return next();
     }
 
-    // Emergency exemption: SOS triggers should NEVER be blocked by a missing or expired CSRF token
-    if (req.path.startsWith('/api/sos') || req.path === '/api/sos') {
+    // Emergency & Webhook exemption: SOS triggers & external webhooks (WhatsApp/Telegram) do not use browser cookies
+    if (
+      req.path.startsWith('/api/sos') ||
+      req.path === '/api/sos' ||
+      req.path.startsWith('/api/webhooks')
+    ) {
       return next();
     }
 

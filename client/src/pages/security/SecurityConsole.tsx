@@ -11,7 +11,10 @@ import {
   Plus, 
   Building2, 
   X,
-  Phone
+  Phone,
+  MessageSquare,
+  Send,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -47,7 +50,14 @@ export default function SecurityConsole() {
   const { user } = useAuth();
   const [events, setEvents] = useState<SosEventItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'ALL' | 'STATIONS'>('ACTIVE');
+  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'ALL' | 'STATIONS' | 'WEBHOOKS'>('ACTIVE');
+
+  // Omnichannel Webhook Simulation
+  const [simulatingWebhook, setSimulatingWebhook] = useState(false);
+  const [simResult, setSimResult] = useState<any>(null);
+  const [simChannel, setSimChannel] = useState<'WHATSAPP' | 'TELEGRAM'>('WHATSAPP');
+  const [simSender, setSimSender] = useState('+919876543210');
+  const [simMessage, setSimMessage] = useState('HELP SOS IN NORTH HOSTEL');
 
   // Police stations
   const [stations, setStations] = useState<PoliceStationItem[]>([]);
@@ -59,6 +69,31 @@ export default function SecurityConsole() {
     lat: 19.0760,
     lng: 72.8777,
   });
+
+  const handleSimulateWebhookSos = async () => {
+    setSimulatingWebhook(true);
+    setSimResult(null);
+    try {
+      const res = await fetch('/api/webhooks/simulate-sos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: simChannel,
+          sender: simSender,
+          message: simMessage,
+          lat: 19.0760,
+          lng: 72.8777,
+        }),
+      });
+      const data = await res.json();
+      setSimResult(data);
+      fetchEvents();
+    } catch (err: any) {
+      alert('Simulation error: ' + err.message);
+    } finally {
+      setSimulatingWebhook(false);
+    }
+  };
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -255,6 +290,18 @@ export default function SecurityConsole() {
           >
             <Building2 className="w-3.5 h-3.5" />
             <span>Police Precincts Directory ({stations.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('WEBHOOKS')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
+              activeTab === 'WEBHOOKS'
+                ? 'bg-emerald-700 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>WhatsApp & Telegram Gateways</span>
           </button>
         </div>
 
@@ -464,6 +511,146 @@ export default function SecurityConsole() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* WEBHOOKS GATEWAY MANAGEMENT & LIVE SIMULATOR */}
+      {activeTab === 'WEBHOOKS' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* WhatsApp Gateway Card */}
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black">
+                    WA
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900">Twilio WhatsApp Emergency Webhook</h3>
+                    <p className="text-xs text-slate-500">Live incoming SOS & location drop handler</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  ONLINE
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono">
+                <div><strong>Endpoint:</strong> <code>POST /api/webhooks/whatsapp</code></div>
+                <div><strong>Triggers:</strong> <code>SOS</code>, <code>HELP</code>, <code>RAGGING</code>, or WhatsApp Pin</div>
+                <div><strong>Auto-Response:</strong> Immediate TwiML dispatch confirmation</div>
+              </div>
+
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Students can send an emergency WhatsApp message or live location pin to the campus safety number. Nirbhik instantly parses coordinates and triggers emergency dispatch.
+              </p>
+            </div>
+
+            {/* Telegram Gateway Card */}
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-800 flex items-center justify-center font-black">
+                    TG
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900">Telegram Bot SOS Webhook</h3>
+                    <p className="text-xs text-slate-500">Direct bot commands & location sharing</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                  ONLINE
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono">
+                <div><strong>Endpoint:</strong> <code>POST /api/webhooks/telegram</code></div>
+                <div><strong>Commands:</strong> <code>/sos</code>, <code>/help</code>, or Telegram Location</div>
+                <div><strong>Auto-Response:</strong> Immediate Police & Security notification</div>
+              </div>
+
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Connect your Telegram Bot token in <code>.env</code> to allow students to trigger instant emergency beacons directly from their Telegram app without opening a browser.
+              </p>
+            </div>
+          </div>
+
+          {/* Interactive Webhook Simulator */}
+          <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-xl space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-extrabold text-base">Live Omnichannel Webhook Simulator (Demo Runner)</h3>
+              </div>
+              <span className="text-xs font-mono bg-white/10 px-2.5 py-1 rounded-full text-slate-300">
+                POST /api/webhooks/simulate-sos
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Simulate an incoming distress trigger from WhatsApp or Telegram to test instant multi-channel dispatch, Haversine nearest precinct calculations, and realtime Security Command broadcast.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Channel</label>
+                <select
+                  value={simChannel}
+                  onChange={(e) => setSimChannel(e.target.value as any)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                >
+                  <option value="WHATSAPP">WhatsApp (Twilio Gateway)</option>
+                  <option value="TELEGRAM">Telegram Bot Gateway</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Sender Identifier</label>
+                <input
+                  type="text"
+                  value={simSender}
+                  onChange={(e) => setSimSender(e.target.value)}
+                  placeholder="+919876543210 or @username"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Incoming Message Body</label>
+                <input
+                  type="text"
+                  value={simMessage}
+                  onChange={(e) => setSimMessage(e.target.value)}
+                  placeholder="SOS Emergency text"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSimulateWebhookSos}
+                disabled={simulatingWebhook}
+                className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{simulatingWebhook ? 'Dispatching Test Beacon...' : `Fire Simulated ${simChannel} SOS`}</span>
+              </button>
+            </div>
+
+            {simResult && (
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-xs space-y-2 animate-in fade-in">
+                <div className="font-bold text-emerald-400 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{simResult.message}</span>
+                </div>
+                <div className="font-mono text-[11px] text-slate-300">
+                  Beacon ID: {simResult.sosId} • Nearest Station: {simResult.nearestStations?.[0]?.name} ({simResult.nearestStations?.[0]?.distanceKm?.toFixed(2)} km)
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

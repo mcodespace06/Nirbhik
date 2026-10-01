@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Lock, EyeOff, AlertCircle, Calendar, MapPin, Tag, UploadCloud, X, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import TrackingKeyModal from '../../components/complaints/TrackingKeyModal';
+import { VoiceNoteRecorder } from '../../components/voice/VoiceNoteRecorder';
 
 interface Category {
   id: string;
@@ -60,6 +61,30 @@ export default function NewComplaint({ onBack, onTrackKey }: NewComplaintProps) 
   const [description, setDescription] = useState('');
   const [targetLabel, setTargetLabel] = useState('');
   const [attachments, setAttachments] = useState<Array<{ fileKey: string; mime: string; size: number; name: string }>>([]);
+  const [, setVoiceNote] = useState<{ blob: Blob; duration: number; isMasked: boolean } | null>(null);
+
+  const handleVoiceReady = (blob: Blob | null, duration: number, isMasked: boolean) => {
+    if (!blob) {
+      setVoiceNote(null);
+      setAttachments((prev) => prev.filter((a) => !a.fileKey.startsWith('evidence/voice-')));
+      return;
+    }
+    setVoiceNote({ blob, duration, isMasked });
+    const fileKey = `evidence/voice-${Date.now()}-${isMasked ? 'masked' : 'standard'}.wav`;
+    setAttachments((prev) => [
+      ...prev.filter((a) => !a.fileKey.startsWith('evidence/voice-')),
+      {
+        fileKey,
+        mime: 'audio/wav',
+        size: blob.size,
+        name: `🎤 Voice Statement (${isMasked ? 'Disguised Pitch' : 'Original'}) - ${duration}s`,
+      },
+    ]);
+
+    if (!description || description.trim().length === 0) {
+      setDescription(`[Voice Evidence Attached]: Reporter recorded a ${duration}-second voice statement (${isMasked ? 'acoustically pitch-masked for anonymity' : 'standard'}). Please refer to the audio attachment for first-hand narrative.`);
+    }
+  };
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -352,6 +377,11 @@ export default function NewComplaint({ onBack, onTrackKey }: NewComplaintProps) 
                 />
               </div>
             </div>
+          </div>
+
+          {/* Anonymous Voice Note Evidence */}
+          <div>
+            <VoiceNoteRecorder onAudioReady={handleVoiceReady} disabled={loading} />
           </div>
 
           {/* Description */}

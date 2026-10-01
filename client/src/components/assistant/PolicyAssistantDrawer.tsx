@@ -30,10 +30,11 @@ interface PolicyAssistantDrawerProps {
 }
 
 const SUGGESTED_PROMPTS = [
-  'What is the penalty for ragging or bullying?',
+  'What is the legal penalty for ragging under UGC rules?',
+  'क्या सीनियर्स मुझसे पैसे या असाइनमेंट मांग सकते हैं?',
+  'हॉस्टल में बदसलूकी या रैगिंग की शिकायत कैसे करें?',
   'What are the hostel curfew hours and late pass rules?',
-  'How do I file a confidential harassment complaint?',
-  'Can security or staff inspect personal belongings?',
+  'Can I file a confidential harassment complaint anonymously?',
 ];
 
 export default function PolicyAssistantDrawer({
@@ -48,8 +49,8 @@ export default function PolicyAssistantDrawer({
       id: 'welcome',
       sender: 'assistant',
       content:
-        'Hello! I am your **Campus Policy & Student Rights Assistant**.\n\nAsk me anything regarding campus regulations, anti-ragging bylaws, hostel timings, or disciplinary policies. My answers are strictly cited from official university documents.',
-      citations: ['University Handbook › General Guidelines'],
+        'Hello! I am your **Campus Policy & Student Rights Assistant**.\n\n🌐 **Multilingual Ready**: Feel free to speak with me in **English, Hindi (हिंदी), Hinglish, Marathi, Tamil, or your native language**.\n\nAsk me anything regarding UGC anti-ragging regulations, campus safety bylaws, hostel timings, or disciplinary policies.',
+      citations: ['UGC Anti-Ragging Regulation 2009 › Section 3', 'University Handbook › Safety Guidelines'],
     },
   ]);
   const [input, setInput] = useState(initialQuery);
@@ -139,12 +140,14 @@ export default function PolicyAssistantDrawer({
             </div>
             <div>
               <div className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
-                <span>Campus Policy Assistant</span>
-                <span className="text-[10px] bg-sky-200 text-sky-800 font-bold px-1.5 py-0.5 rounded-full">
-                  RAG Gemini
+                <span>Campus Policy & Rights Assistant</span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">
+                  UGC 2009 RAG
                 </span>
               </div>
-              <div className="text-[11px] text-slate-500 font-medium">Ground Truth Student Rights & Codes</div>
+              <div className="text-[11px] text-slate-500 font-medium">
+                🌐 Vernacular Auto-Detect: English • हिंदी • Hinglish • मराठी • தமிழ்
+              </div>
             </div>
           </div>
 
