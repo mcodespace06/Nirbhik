@@ -28,9 +28,43 @@ export async function dispatchSosAlert(
   accuracy?: number | null,
   userInfo?: { username: string; email: string; phone?: string | null; role: string }
 ): Promise<SosDispatchResult> {
-  const stations = await prisma.policeStation.findMany({
-    where: { active: true },
-  });
+  const DEFAULT_POLICE_STATIONS: PoliceStation[] = [
+    {
+      id: 'default-ps-1',
+      name: 'Campus Central Police Station',
+      email: process.env.DISPATCH_ALERT_EMAIL || 'smahek911@gmail.com',
+      phone: process.env.TWILIO_TARGET_PHONE || '+918591680180',
+      lat: 19.0770,
+      lng: 72.8785,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: 'default-ps-2',
+      name: 'North District Police Precinct',
+      email: process.env.DISPATCH_ALERT_EMAIL || 'smahek911@gmail.com',
+      phone: process.env.TWILIO_TARGET_PHONE || '+918591680180',
+      lat: 19.0820,
+      lng: 72.8760,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ];
+
+  let stations: PoliceStation[] = [];
+  try {
+    stations = await prisma.policeStation.findMany({
+      where: { active: true },
+    });
+    if (!stations || stations.length === 0) {
+      stations = DEFAULT_POLICE_STATIONS;
+    }
+  } catch (dbErr: any) {
+    console.warn(`[SOS Dispatch Warning] Database station lookup offline (${dbErr.message}). Using resilient campus fallback stations.`);
+    stations = DEFAULT_POLICE_STATIONS;
+  }
 
   const nearestStations = findNearestPoliceStations(lat, lng, stations, 2);
   const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
@@ -77,8 +111,8 @@ Alert dispatched to registered police/security contacts.`,
   }
 
   // 2. Dispatch to Campus Security Officers
-  const securityDeskEmail = process.env.SECURITY_DESK_EMAIL || 'security@college.edu';
-  const securityDeskPhone = process.env.SECURITY_DESK_PHONE || '+912226500999';
+  const securityDeskEmail = process.env.SECURITY_DESK_EMAIL || process.env.DISPATCH_ALERT_EMAIL || 'smahek911@gmail.com';
+  const securityDeskPhone = process.env.SECURITY_DESK_PHONE || process.env.TWILIO_TARGET_PHONE || '+918591680180';
 
   dispatchedTo.push({
     type: 'CAMPUS_SECURITY',
