@@ -112,7 +112,13 @@ export async function sendTwilioSms(options: SendSmsOptions): Promise<TwilioSend
       result.data.message.includes('predefined SMS templates')
     ) {
       console.log(
-        `[Twilio Trial Adapter] Custom body rejected by trial policy. Retrying with approved template: "${trialTemplate}"`
+        `[Twilio Trial Adapter] Custom body rejected by trial policy. Falling back to approved template.`
+      );
+      console.log(`[Twilio Trial Adapter] ─── INTENDED EMERGENCY SMS CONTENT ───`);
+      console.log(body.replace(/\\n/g, '\n'));
+      console.log(`[Twilio Trial Adapter] ─── END OF INTENDED SMS ───`);
+      console.log(
+        `[Twilio Trial Adapter] Note: Upgrade your Twilio account at https://console.twilio.com to send the full emergency message above as the actual SMS body.`
       );
       postData.Body = trialTemplate;
       result = await makeTwilioPost(accountSid, authToken, postData);
