@@ -110,7 +110,11 @@ export class GeminiAIProvider implements AIProvider {
   private textModel: string;
   private embedModel: string;
 
-  constructor(apiKey: string, textModel = 'gemini-1.5-flash', embedModel = 'text-embedding-004') {
+  constructor(
+    apiKey: string,
+    textModel = process.env.GEMINI_MODEL || 'gemini-flash-latest',
+    embedModel = process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001'
+  ) {
     this.genAI = new GoogleGenerativeAI(apiKey);
     this.textModel = process.env.GEMINI_MODEL || textModel;
     this.embedModel = process.env.GEMINI_EMBED_MODEL || embedModel;

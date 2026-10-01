@@ -3,6 +3,7 @@ import { mailer } from '../notifications/mailer';
 import { findNearestPoliceStations, NearestStation } from './haversine';
 import { sosBus } from './bus';
 import { PoliceStation } from '@prisma/client';
+import { sendTwilioSms } from './twilio';
 
 export interface DispatchRecipient {
   type: 'POLICE_STATION' | 'CAMPUS_SECURITY';
@@ -68,8 +69,11 @@ Alert dispatched to registered police/security contacts.`,
       console.warn(`[SOS Dispatch] Police station email warning: ${err.message}`);
     }
 
-    // Mock SMS dispatch
-    console.log(`[SOS SMS Gateway Mock] SMS sent to ${item.station.phone}: SOS ALERT at ${lat}, ${lng} (${mapsUrl})`);
+    // Live Twilio SMS dispatch
+    await sendTwilioSms({
+      to: item.station.phone,
+      body: `[EMERGENCY SOS ALERT] Distress reported at (${lat}, ${lng}). Distance: ${item.distanceKm}km. Map: ${mapsUrl}`,
+    });
   }
 
   // 2. Dispatch to Campus Security Officers
@@ -102,6 +106,12 @@ Alert sent to registered police/security contacts. Speed dial 112 active.`,
   } catch (err: any) {
     console.warn(`[SOS Dispatch] Security desk email warning: ${err.message}`);
   }
+
+  // Dispatch live SMS to campus security desk
+  await sendTwilioSms({
+    to: securityDeskPhone,
+    body: `🚨 [CAMPUS SOS] User distress at (${lat}, ${lng}). Contact: ${userInfo?.phone || userInfo?.email || 'N/A'}. Map: ${mapsUrl}`,
+  });
 
   // 3. Realtime Broadcast to Security & Admin Consoles via SSE
   sosBus.broadcast('sos_triggered', {

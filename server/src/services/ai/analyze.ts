@@ -187,7 +187,7 @@ Description: ${complaint.description}
   const analysis = await prisma.aiAnalysis.create({
     data: {
       complaintId,
-      model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-flash-latest',
       promptVersion: PROMPT_VERSION,
       summary: llmOutput.summary,
       suggestedCategory: llmOutput.suggested_category,

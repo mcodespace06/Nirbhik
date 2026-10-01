@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { 
   Shield, 
-  Lock, 
+  Lock,
+  CheckCircle2,
   AlertTriangle, 
   Search, 
   PhoneCall, 
-  CheckCircle2, 
   UserCheck, 
   ArrowRight, 
   LogOut, 
@@ -408,43 +408,6 @@ function MainApp() {
                 </div>
               </div>
             </div>
-
-            {/* Architecture Explanations */}
-            <section className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-              <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <Lock className="w-5 h-5 text-sky-700" />
-                Security & Anonymity Architecture (Phase 2 Active)
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-semibold text-slate-900 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    Zero Identity Storage
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    The <code>complaints</code> database table contains zero user foreign keys or identifying columns. Admins see only pseudonyms like <code>Complainant #B9E4</code>.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-semibold text-slate-900 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    AES-256-GCM Vault Isolation
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Confidential reports store encrypted reporter links in an isolated PostgreSQL <code>vault</code> schema, inaccessible to case handlers and admin endpoints.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-semibold text-slate-900 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    Crockford Base32 Keys
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Unique tracking keys (<code>CV-YYMM-XXXX-XXXX</code>) are generated once with checksum protection. The database stores only a salted SHA-256 hash.
-                  </p>
-                </div>
-              </div>
-            </section>
           </div>
         )}
       </main>

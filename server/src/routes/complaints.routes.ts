@@ -8,6 +8,7 @@ import { authenticate, optionalAuthenticate } from '../middleware/auth.middlewar
 import { requireRole, AuthenticatedRequest } from '../services/auth/rbac';
 import { ComplaintMode, Role, RestrictedQueue, ComplaintStatus } from '@prisma/client';
 import { analyzeComplaint } from '../services/ai/analyze';
+import { sendEmail } from '../services/notifications/mailer';
 import { complaintSubmitLimiter } from '../middleware/rate-limit';
 
 const router = Router();
@@ -160,6 +161,46 @@ router.post('/', complaintSubmitLimiter, optionalAuthenticate, async (req: Authe
     await analyzeComplaint(complaint.id);
   } catch (err) {
     console.error('[AI Analysis Warning]:', err);
+  }
+
+  // 7. Active Email Dispatch for Institutional Intake & Confidential Confirmation
+  try {
+    const intakeEmail = process.env.DISPATCH_ALERT_EMAIL || process.env.CAMPUS_ADMIN_EMAIL || 'admin@campusvoice.local';
+    await sendEmail({
+      to: intakeEmail,
+      subject: `[New Case Filed] ${complaint.pseudonym} - ${category.name} (${complaint.mode})`,
+      text: `A new incident has been filed on CampusVoice.\nPseudonym: ${complaint.pseudonym}\nCategory: ${category.name}\nRouting Queue: ${category.routesToQueue || 'GENERAL'}\nIncident Time: ${complaint.incidentAt || 'Not specified'}\nTitle: ${complaint.title}\nDescription: ${complaint.description.slice(0, 300)}...`,
+      html: `<div style="font-family:sans-serif;line-height:1.6;color:#1e293b;">
+        <h2 style="color:#0369a1;">CampusVoice Incident Notification</h2>
+        <p>A new incident report has been securely registered.</p>
+        <table style="border-collapse:collapse;width:100%;max-width:600px;">
+          <tr><td style="padding:6px;font-weight:bold;">Pseudonym:</td><td style="padding:6px;">${complaint.pseudonym}</td></tr>
+          <tr><td style="padding:6px;font-weight:bold;">Category:</td><td style="padding:6px;">${category.name}</td></tr>
+          <tr><td style="padding:6px;font-weight:bold;">Routing Queue:</td><td style="padding:6px;">${category.routesToQueue || 'GENERAL'}</td></tr>
+          <tr><td style="padding:6px;font-weight:bold;">Mode:</td><td style="padding:6px;">${complaint.mode}</td></tr>
+          <tr><td style="padding:6px;font-weight:bold;">Title:</td><td style="padding:6px;">${complaint.title}</td></tr>
+        </table>
+        <p style="margin-top:16px;"><strong>Incident Description Summary:</strong><br/>${complaint.description.slice(0, 400)}...</p>
+        <p style="font-size:12px;color:#64748b;">This is an automated dispatch from CampusVoice Core Services.</p>
+      </div>`,
+    });
+
+    if (mode === ComplaintMode.CONFIDENTIAL && req.user?.collegeEmail) {
+      await sendEmail({
+        to: req.user.collegeEmail,
+        subject: `CampusVoice Case Confirmation: ${complaint.pseudonym}`,
+        text: `Your confidential report "${complaint.title}" has been securely registered in the isolated vault.\nTracking Key: ${trackingKey}\nPseudonym: ${complaint.pseudonym}\nSave this key securely to track investigation updates.`,
+        html: `<div style="font-family:sans-serif;line-height:1.6;color:#1e293b;">
+          <h2 style="color:#059669;">Confidential Case Registration Confirmed</h2>
+          <p>Your report has been safely registered in the encrypted vault.</p>
+          <p><strong>Tracking Key:</strong> <code style="background:#f1f5f9;padding:4px 8px;border-radius:4px;font-size:14px;color:#0f172a;">${trackingKey}</code></p>
+          <p><strong>Assigned Pseudonym:</strong> ${complaint.pseudonym}</p>
+          <p style="font-size:13px;color:#64748b;">Keep this tracking key safe. Case handlers and administrators will only see your pseudonym.</p>
+        </div>`,
+      });
+    }
+  } catch (mailErr) {
+    console.warn('[Email Dispatch Warning]:', mailErr);
   }
 
   return res.status(201).json({

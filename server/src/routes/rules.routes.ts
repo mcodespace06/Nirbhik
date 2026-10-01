@@ -132,6 +132,32 @@ rulesRouter.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/rules/ask
+ * Public/User rules assistant query endpoint (matching frontend drawer)
+ */
+rulesRouter.post('/ask', aiAssistantLimiter, optionalAuthenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const parsed = AskRulesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', details: parsed.error.format() } });
+    }
+
+    const { query, sessionId } = parsed.data;
+    const userId = req.user?.id;
+
+    const result = await askRulesAssistant({
+      query,
+      userId,
+      sessionId,
+    });
+
+    return res.status(200).json(result);
+  } catch (error: any) {
+    return res.status(500).json({ error: { code: 'SERVER_ERROR', message: error.message } });
+  }
+});
+
 // ==========================================
 // 2. ADMIN RULES CRUD (/api/admin/rules)
 // ==========================================
