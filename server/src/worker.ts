@@ -26,23 +26,26 @@ export async function startWorker() {
     // Register job queues (Skeleton for Phase 0)
     await boss.work('analyze-complaint', async (jobs) => {
       for (const job of jobs) {
-        console.log(`[Job: analyze-complaint] Processing job ${job.id} for complaint ${job.data.complaintId}`);
+        console.log(`[Job: analyze-complaint] Processing job ${job.id} for complaint ${(job.data as any)?.complaintId}`);
       }
     });
 
     await boss.work('sla-escalation', async () => {
-      console.log('[Job: sla-escalation] Checking SLA status across open complaints.');
+      console.log('[Job: sla-escalation] Checking SLA status across open complaints...');
+      const { checkAndEscalateSLAs } = await import('./services/sla/escalation');
+      const report = await checkAndEscalateSLAs();
+      console.log(`[Job: sla-escalation] Evaluated ${report.evaluatedCasesCount} cases: ${report.breachedCasesCount} breaches, ${report.escalatedCasesCount} newly escalated.`);
     });
 
     await boss.work('sos-dispatch', async (jobs) => {
       for (const job of jobs) {
-        console.log(`[Job: sos-dispatch] Dispatching emergency alert for SOS event ${job.data.sosId}`);
+        console.log(`[Job: sos-dispatch] Dispatching emergency alert for SOS event ${(job.data as any)?.sosId}`);
       }
     });
 
     await boss.work('embed-rules', async (jobs) => {
       for (const job of jobs) {
-        console.log(`[Job: embed-rules] Chunking & embedding rule document ${job.data.ruleId}`);
+        console.log(`[Job: embed-rules] Chunking & embedding rule document ${(job.data as any)?.ruleId}`);
       }
     });
 

@@ -55,17 +55,23 @@ import adminRoutes from './routes/admin.routes';
 import complaintsRoutes from './routes/complaints.routes';
 import rulesRouter, { adminRulesRouter, assistantRouter } from './routes/rules.routes';
 import { sosRouter, securityRouter, adminPoliceRouter } from './routes/sos.routes';
+import analyticsRoutes from './routes/analytics.routes';
+import notificationsRoutes from './routes/notifications.routes';
+import transparencyRoutes from './routes/transparency.routes';
 
 // API Route Mounts
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/rules', adminRulesRouter);
 app.use('/api/admin/police-stations', adminPoliceRouter);
+app.use('/api/admin/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintsRoutes);
 app.use('/api/rules', rulesRouter);
 app.use('/api/assistant', assistantRouter);
 app.use('/api/sos', sosRouter);
 app.use('/api/security/sos', securityRouter);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/transparency', transparencyRoutes);
 app.use('/api', complaintsRoutes); // Allows /api/track/:key as specified in ARCHITECTURE.md §7
 
 // Standardized 404 handler

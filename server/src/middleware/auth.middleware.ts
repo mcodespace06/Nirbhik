@@ -58,3 +58,6 @@ export function optionalAuthenticate(req: AuthenticatedRequest, _res: Response, 
 
   next();
 }
+
+export const requireAuth = authenticate;
+export { requireRole, requirePermission, AuthenticatedRequest } from '../services/auth/rbac';

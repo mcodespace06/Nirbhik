@@ -51,6 +51,7 @@ export interface AuthenticatedUser {
   status: string;
   collegeEmail: string;
   department?: string | null;
+  phone?: string | null;
 }
 
 export interface AuthenticatedRequest extends Request {

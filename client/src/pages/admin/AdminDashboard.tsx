@@ -14,10 +14,12 @@ import {
   UserCheck,
   ShieldAlert,
   CheckCheck,
-  ExternalLink
+  ExternalLink,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import CaseDetailModal from './CaseDetailModal';
+import AdminAnalytics from './AdminAnalytics';
 
 interface CaseItem {
   id: string;
@@ -63,6 +65,9 @@ export default function AdminDashboard() {
   const [alerts, setAlerts] = useState<RiskAlertItem[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [alertStatusFilter, setAlertStatusFilter] = useState<'OPEN' | 'ALL'>('OPEN');
+
+  // Navigation tab state: 'CASES' | 'ANALYTICS'
+  const [adminTab, setAdminTab] = useState<'CASES' | 'ANALYTICS'>('CASES');
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -223,8 +228,46 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* AI Risk & Threat Intelligence Panel (PRD §5 / ARCHITECTURE §7) */}
-      <div className="rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50/80 via-white to-amber-50/50 p-4 shadow-sm space-y-3">
+      {/* Admin Section Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setAdminTab('CASES')}
+          className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs sm:text-sm transition-all border-b-2 -mb-[2px] ${
+            adminTab === 'CASES'
+              ? 'border-sky-600 text-sky-800 bg-sky-50/70 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-t-xl'
+          }`}
+        >
+          <FileText className="w-4 h-4 text-sky-600" />
+          <span>Case Queue & Threat Alerts</span>
+          {alerts.filter((a) => a.status === 'OPEN').length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 text-[10px] font-black">
+              {alerts.filter((a) => a.status === 'OPEN').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAdminTab('ANALYTICS')}
+          className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs sm:text-sm transition-all border-b-2 -mb-[2px] ${
+            adminTab === 'ANALYTICS'
+              ? 'border-sky-600 text-sky-800 bg-sky-50/70 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-t-xl'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4 text-indigo-600" />
+          <span>Campus Analytics & Hotspot Heatmap</span>
+        </button>
+      </div>
+
+      {adminTab === 'ANALYTICS' ? (
+        <AdminAnalytics />
+      ) : (
+        <>
+          {/* AI Risk & Threat Intelligence Panel (PRD §5 / ARCHITECTURE §7) */}
+          <div className="rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50/80 via-white to-amber-50/50 p-4 shadow-sm space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-sm">
@@ -594,6 +637,8 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Case Management Modal */}
       {selectedCaseId && (

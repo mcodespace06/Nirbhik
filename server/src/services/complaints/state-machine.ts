@@ -52,7 +52,7 @@ export function validateStateTransition(
     };
   }
 
-  if (STATES_REQUIRING_REASON.includes(target) && (!reason || reason.trim().length === 0)) {
+  if (STATES_REQUIRING_REASON.includes(target as any) && (!reason || reason.trim().length === 0)) {
     return {
       valid: false,
       error: `A mandatory reason must be provided when transitioning to status '${target}'.`,

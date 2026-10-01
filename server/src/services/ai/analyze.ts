@@ -235,8 +235,9 @@ Description: ${complaint.description}
     data: {
       complaintId,
       type: 'AI_SCREENED',
-      actorRole: 'SYSTEM_AI',
+      actorRole: null,
       payload: {
+        actor: 'SYSTEM_AI',
         priority: finalPriority,
         severityScore: llmOutput.severity_score,
         urgencySignals: llmOutput.urgency_signals,

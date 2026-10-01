@@ -204,7 +204,174 @@ Any student found guilty of engaging in or abetting ragging will face immediate 
   if (!existingRule) {
     await prisma.ruleDocument.create({ data: sampleRule });
   }
-  console.log('[Seed] Seeded sample campus rules.');
+  // 8. Sample Complaints (for Analytics, Heatmap & Transparency Dashboards)
+  const categories = await prisma.category.findMany();
+  const locations = await prisma.location.findMany();
+  const getCat = (name: string) => categories.find((c) => c.name === name)?.id || categories[0].id;
+  const getLoc = (name: string) => locations.find((l) => l.name === name)?.id || locations[0].id;
+
+  const sampleComplaints = [
+    {
+      hash: 'hash-demo-1',
+      title: 'Broken ventilation and hazardous chemical odor in Lab 402',
+      description: 'The exhaust system in Organic Chemistry Lab 402 has stopped functioning, leading to chemical fumes accumulating in student workstations.',
+      catName: 'Infrastructure',
+      locName: 'Science & Engineering Complex',
+      priority: Priority.HIGH,
+      status: ComplaintStatus.RESOLVED,
+      pseudonym: 'Complainant #A7F3',
+      createdAt: new Date(Date.now() - 5 * 24 * 3600 * 1000),
+      resolvedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+      satisfactionRating: 5,
+    },
+    {
+      hash: 'hash-demo-2',
+      title: 'Curfew violations and rowdy behavior in corridor',
+      description: 'Senior hostel block 3 residents played loud speakers and intimidated junior rooms until 3:30 AM repeatedly.',
+      catName: 'Hostel',
+      locName: 'North Campus Boys Hostel',
+      priority: Priority.HIGH,
+      status: ComplaintStatus.ESCALATED,
+      pseudonym: 'Complainant #B92D',
+      createdAt: new Date(Date.now() - 4 * 24 * 3600 * 1000),
+      resolvedAt: null,
+      satisfactionRating: null,
+    },
+    {
+      hash: 'hash-demo-3',
+      title: 'Unlit dark pathway between Library back exit and sports field',
+      description: 'Three high-mast light fixtures have been completely non-functional for over 2 weeks, creating severe safety risks at night.',
+      catName: 'Safety/Security',
+      locName: 'Central University Library',
+      priority: Priority.HIGH,
+      status: ComplaintStatus.IN_PROGRESS,
+      pseudonym: 'Complainant #C4E1',
+      createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000),
+      resolvedAt: null,
+      satisfactionRating: null,
+    },
+    {
+      hash: 'hash-demo-4',
+      title: 'Unhygienic food storage and sour milk served at breakfast',
+      description: 'The dairy refrigeration unit in the central canteen broke down, and sour dairy was still used in student meals.',
+      catName: 'Canteen',
+      locName: 'University Cafeteria & Food Court',
+      priority: Priority.MEDIUM,
+      status: ComplaintStatus.RESOLVED,
+      pseudonym: 'Complainant #D88F',
+      createdAt: new Date(Date.now() - 7 * 24 * 3600 * 1000),
+      resolvedAt: new Date(Date.now() - 4 * 24 * 3600 * 1000),
+      satisfactionRating: 4,
+    },
+    {
+      hash: 'hash-demo-5',
+      title: 'Group intimidation and forced tasks demanded from 1st-year students',
+      description: 'A group of senior students cornered first-year students demanding they complete assignments and perform humiliating tasks.',
+      catName: 'Ragging',
+      locName: 'Indoor Sports & Gym Pavilion',
+      priority: Priority.CRITICAL,
+      status: ComplaintStatus.TRIAGED,
+      pseudonym: 'Complainant #E20A',
+      createdAt: new Date(Date.now() - 1 * 24 * 3600 * 1000),
+      resolvedAt: null,
+      satisfactionRating: null,
+    },
+    {
+      hash: 'hash-demo-6',
+      title: 'Air conditioning failure during mid-term examination hall 2B',
+      description: 'Room temperature exceeded 38 degrees Celsius during exam hours; multiple students reported dizziness.',
+      catName: 'Academic',
+      locName: 'Main Administrative Block',
+      priority: Priority.MEDIUM,
+      status: ComplaintStatus.RESOLVED,
+      pseudonym: 'Complainant #F51B',
+      createdAt: new Date(Date.now() - 10 * 24 * 3600 * 1000),
+      resolvedAt: new Date(Date.now() - 9 * 24 * 3600 * 1000),
+      satisfactionRating: 5,
+    },
+    {
+      hash: 'hash-demo-7',
+      title: 'Campus electric shuttle bus repeatedly skipping Gate 1 stop',
+      description: 'Shuttle drivers skip the scheduled 8:30 AM student pickup on rainy days causing massive class delays.',
+      catName: 'Transport',
+      locName: 'Main Entrance & Gate 1',
+      priority: Priority.LOW,
+      status: ComplaintStatus.SUBMITTED,
+      pseudonym: 'Complainant #G33C',
+      createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+      resolvedAt: null,
+      satisfactionRating: null,
+    },
+    {
+      hash: 'hash-demo-8',
+      title: 'Repeated harassment and stalking along south dormitory trail',
+      description: 'An unidentified person on a bike has repeatedly harassed students walking back from library past 9 PM.',
+      catName: 'Harassment',
+      locName: 'South Campus Girls Hostel',
+      priority: Priority.CRITICAL,
+      status: ComplaintStatus.ESCALATED,
+      pseudonym: 'Complainant #H74A',
+      createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+      resolvedAt: null,
+      satisfactionRating: null,
+    },
+  ];
+
+  for (const sc of sampleComplaints) {
+    const existing = await prisma.complaint.findUnique({ where: { trackingKeyHash: sc.hash } });
+    if (!existing) {
+      await prisma.complaint.create({
+        data: {
+          trackingKeyHash: sc.hash,
+          title: sc.title,
+          description: sc.description,
+          categoryId: getCat(sc.catName),
+          locationId: getLoc(sc.locName),
+          priority: sc.priority,
+          status: sc.status,
+          pseudonym: sc.pseudonym,
+          incidentAt: sc.createdAt,
+          createdAt: sc.createdAt,
+          resolvedAt: sc.resolvedAt,
+          satisfactionRating: sc.satisfactionRating,
+        },
+      });
+    }
+  }
+  console.log(`[Seed] Seeded ${sampleComplaints.length} representative complaints for analytics.`);
+
+  // 9. Sample Notifications
+  const adminUser = await prisma.user.findFirst({ where: { username: 'admin_case1' } });
+  if (adminUser) {
+    await prisma.notification.createMany({
+      data: [
+        {
+          userId: adminUser.id,
+          channel: 'IN_APP',
+          type: 'SLA_BREACH',
+          payload: {
+            title: 'SLA Breach Warning',
+            message: 'Case Complainant #H74A has reached CRITICAL SLA threshold.',
+            priority: 'CRITICAL',
+          },
+          createdAt: new Date(Date.now() - 1000 * 60 * 30),
+        },
+        {
+          userId: adminUser.id,
+          channel: 'IN_APP',
+          type: 'CASE_ASSIGNED',
+          payload: {
+            title: 'New Case Assigned',
+            message: 'You have been assigned to case Complainant #C4E1.',
+            priority: 'HIGH',
+          },
+          createdAt: new Date(Date.now() - 1000 * 60 * 120),
+        },
+      ],
+      skipDuplicates: true,
+    });
+    console.log('[Seed] Seeded sample admin notifications.');
+  }
 
   console.log('[Seed] Database seed completed successfully!');
 }

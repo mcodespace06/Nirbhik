@@ -17,7 +17,8 @@ import {
   BookOpen, 
   Sparkles,
   ShieldAlert,
-  Radio
+  Radio,
+  BarChart2
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/public/Login';
@@ -28,16 +29,18 @@ import MyComplaints from './pages/user/MyComplaints';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import RulesLibrary from './pages/public/RulesLibrary';
 import SecurityConsole from './pages/security/SecurityConsole';
+import TransparencyReport from './pages/public/TransparencyReport';
 import PolicyAssistantDrawer from './components/assistant/PolicyAssistantDrawer';
 import SosEmergencyModal from './components/sos/SosEmergencyModal';
+import NotificationCenter from './components/notifications/NotificationCenter';
 
 function MainApp() {
   const { user, logout } = useAuth();
   const [healthStatus, setHealthStatus] = useState<{ status: string; database?: string } | null>(null);
   const [authModal, setAuthModal] = useState<'LOGIN' | 'REGISTER' | null>(null);
 
-  // App Page View State: 'HOME' | 'NEW_COMPLAINT' | 'TRACK' | 'MY_COMPLAINTS' | 'ADMIN' | 'RULES' | 'SECURITY'
-  const [currentView, setCurrentView] = useState<'HOME' | 'NEW_COMPLAINT' | 'TRACK' | 'MY_COMPLAINTS' | 'ADMIN' | 'RULES' | 'SECURITY'>('HOME');
+  // App Page View State: 'HOME' | 'NEW_COMPLAINT' | 'TRACK' | 'MY_COMPLAINTS' | 'ADMIN' | 'RULES' | 'SECURITY' | 'TRANSPARENCY'
+  const [currentView, setCurrentView] = useState<'HOME' | 'NEW_COMPLAINT' | 'TRACK' | 'MY_COMPLAINTS' | 'ADMIN' | 'RULES' | 'SECURITY' | 'TRANSPARENCY'>('HOME');
   const [trackKeyParam, setTrackKeyParam] = useState<string>('');
 
   // SOS Emergency Modal State
@@ -147,6 +150,18 @@ function MainApp() {
               <span className="hidden sm:inline">Campus Rules</span>
             </button>
 
+            <button
+              onClick={() => setCurrentView('TRANSPARENCY')}
+              className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs sm:text-sm ${
+                currentView === 'TRANSPARENCY'
+                  ? 'bg-sky-50 text-sky-700 font-bold'
+                  : 'text-slate-600 hover:text-sky-700'
+              }`}
+            >
+              <BarChart2 className="w-4 h-4 text-sky-600" />
+              <span className="hidden sm:inline">Transparency</span>
+            </button>
+
             {user && (user.role === 'STUDENT' || user.role === 'TEACHER') && (
               <button
                 onClick={() => setCurrentView('MY_COMPLAINTS')}
@@ -190,7 +205,8 @@ function MainApp() {
             )}
 
             {user ? (
-              <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
+              <div className="flex items-center gap-2 sm:gap-3 pl-2 border-l border-slate-200">
+                <NotificationCenter />
                 <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
                   <UserIcon className="w-4 h-4 text-sky-700" />
                   <div className="text-left hidden sm:block">
@@ -285,6 +301,10 @@ function MainApp() {
               <button onClick={() => setCurrentView('HOME')} className="px-4 py-2 bg-sky-700 text-white rounded-xl text-xs font-bold">Return Home</button>
             </div>
           )
+        )}
+
+        {currentView === 'TRANSPARENCY' && (
+          <TransparencyReport />
         )}
 
         {currentView === 'HOME' && (
