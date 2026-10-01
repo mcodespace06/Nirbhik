@@ -3,7 +3,7 @@ import { mailer } from '../notifications/mailer';
 import { findNearestPoliceStations, NearestStation } from './haversine';
 import { sosBus } from './bus';
 import { PoliceStation } from '@prisma/client';
-import { sendTwilioSms } from './twilio';
+import { sendSmartSms } from './email-sms-gateway';
 
 export interface DispatchRecipient {
   type: 'POLICE_STATION' | 'CAMPUS_SECURITY';
@@ -103,10 +103,11 @@ Alert dispatched to registered police/security contacts.`,
       console.warn(`[SOS Dispatch] Police station email warning: ${err.message}`);
     }
 
-    // Live Twilio SMS dispatch
-    await sendTwilioSms({
+    // Live SMS dispatch via Smart Multi-Channel (Email-to-SMS → Twilio → Email)
+    await sendSmartSms({
       to: item.station.phone,
       body: `🚨 SOS EMERGENCY — HELP NEEDED IMMEDIATELY\n\nA student on campus has triggered an emergency distress alert and needs urgent assistance.\n\n📍 LIVE LOCATION:\n${mapsUrl}\nCoordinates: ${lat}, ${lng} (±${accuracy || 15}m)\n\n👤 Victim: ${userInfo?.username || 'Campus Student'} (${userInfo?.role || 'STUDENT'})\n📞 Contact: ${userInfo?.phone || 'Not available'}\n📧 Email: ${userInfo?.email || 'N/A'}\n\n🏛️ Nearest Station: ${item.station.name} (${item.distanceKm} km away)\n⏰ Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n⚠️ THIS IS NOT A DRILL. Please dispatch a responder to the location immediately. Call 112 if needed.\n\n— Nirbhik Campus Safety System`,
+      subject: `🚨 SOS EMERGENCY at (${lat}, ${lng})`,
     });
   }
 
@@ -141,10 +142,11 @@ Alert sent to registered police/security contacts. Speed dial 112 active.`,
     console.warn(`[SOS Dispatch] Security desk email warning: ${err.message}`);
   }
 
-  // Dispatch live SMS to campus security desk
-  await sendTwilioSms({
+  // Dispatch live SMS to campus security desk via Smart Multi-Channel
+  await sendSmartSms({
     to: securityDeskPhone,
     body: `🚨 CAMPUS EMERGENCY — SOS ALERT ACTIVATED\n\nIMPORTANT: A student has pressed the emergency SOS button and is in distress. Immediate help is required at their location.\n\n📍 CURRENT LOCATION (tap to open Google Maps):\n${mapsUrl}\nGPS: ${lat}, ${lng}\n\n👤 Name: ${userInfo?.username || 'Anonymous Student'}\n📞 Phone: ${userInfo?.phone || 'Not provided'}\n📧 Email: ${userInfo?.email || 'N/A'}\n\n🚔 Nearest Police: ${nearestStations[0]?.station.name || 'Campus Police'} (${nearestStations[0]?.distanceKm || '?'} km)\n⏰ Alert Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n🔴 ACTIONS NEEDED:\n1. Call the student immediately\n2. Dispatch security to the location\n3. Dial 112 if life-threatening\n\n— Nirbhik Campus Safety System`,
+    subject: `🚨 CAMPUS SOS at (${lat}, ${lng})`,
   });
 
   // 3. Realtime Broadcast to Security & Admin Consoles via SSE
