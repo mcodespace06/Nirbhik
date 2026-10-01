@@ -15,7 +15,8 @@ import {
   PasswordResetRequestSchema,
   PasswordResetConfirmSchema,
 } from '../lib/zod/auth';
-import { UserStatus } from '@prisma/client';
+import { UserStatus, Role } from '@prisma/client';
+import { recordAuditLog } from '../services/audit/audit.service';
 
 const router = Router();
 
@@ -361,6 +362,21 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
+
+  // Record audit log for privileged roles (ARCHITECTURE.md §11)
+  if ([Role.ADMIN, Role.SUPER_ADMIN, Role.SECURITY].includes(user.role as any)) {
+    await recordAuditLog({
+      actorId: user.id,
+      action: 'ADMIN_LOGIN',
+      entity: 'users',
+      entityId: user.id,
+      meta: {
+        role: user.role,
+        ip: req.ip || req.socket.remoteAddress || '127.0.0.1',
+        userAgent: req.headers['user-agent'] || 'Unknown',
+      },
+    });
+  }
 
   return res.status(200).json({
     message: 'Login successful.',

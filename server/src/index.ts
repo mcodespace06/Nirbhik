@@ -3,6 +3,10 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { prisma } from './lib/prisma';
+import { securityHeaders } from './middleware/security-headers';
+import { csrfProtection } from './middleware/csrf';
+import { sanitizeRequestBody } from './middleware/sanitize';
+import { globalLimiter } from './middleware/rate-limit';
 
 dotenv.config({ path: '../.env' });
 dotenv.config(); // fallback to server/.env if present
@@ -10,7 +14,10 @@ dotenv.config(); // fallback to server/.env if present
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Security & Parsing Middleware
+// Security Headers (ARCHITECTURE.md §11)
+app.use(securityHeaders());
+
+// CORS & Parsing Middleware
 app.use(
   cors({
     origin: process.env.APP_URL || 'http://localhost:5173',
@@ -20,6 +27,22 @@ app.use(
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Automatic XSS Input Sanitization (ARCHITECTURE.md §11)
+app.use(sanitizeRequestBody());
+
+// CSRF Double-Submit Protection (ARCHITECTURE.md §11)
+app.use(csrfProtection());
+
+// Global DoS / Rate Limiting Protection (ARCHITECTURE.md §11)
+app.use('/api', globalLimiter);
+
+// CSRF Token Issuance Endpoint
+app.get('/api/csrf-token', (req: Request, res: Response) => {
+  res.json({
+    csrfToken: (req as any).csrfToken,
+  });
+});
 
 // Health Check Endpoint (Phase 0 Deliverable)
 app.get('/api/health', async (_req: Request, res: Response) => {
@@ -58,12 +81,16 @@ import { sosRouter, securityRouter, adminPoliceRouter } from './routes/sos.route
 import analyticsRoutes from './routes/analytics.routes';
 import notificationsRoutes from './routes/notifications.routes';
 import transparencyRoutes from './routes/transparency.routes';
+import auditRoutes from './routes/audit.routes';
+import revealRoutes from './routes/reveal.routes';
 
 // API Route Mounts
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/rules', adminRulesRouter);
 app.use('/api/admin/police-stations', adminPoliceRouter);
 app.use('/api/admin/analytics', analyticsRoutes);
+app.use('/api/admin/audit-logs', auditRoutes);
+app.use('/api/admin/reveal', revealRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintsRoutes);
 app.use('/api/rules', rulesRouter);

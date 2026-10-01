@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import CaseDetailModal from './CaseDetailModal';
 import AdminAnalytics from './AdminAnalytics';
+import AuditTrail from './AuditTrail';
 
 interface CaseItem {
   id: string;
@@ -66,8 +67,8 @@ export default function AdminDashboard() {
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [alertStatusFilter, setAlertStatusFilter] = useState<'OPEN' | 'ALL'>('OPEN');
 
-  // Navigation tab state: 'CASES' | 'ANALYTICS'
-  const [adminTab, setAdminTab] = useState<'CASES' | 'ANALYTICS'>('CASES');
+  // Navigation tab state: 'CASES' | 'ANALYTICS' | 'AUDIT'
+  const [adminTab, setAdminTab] = useState<'CASES' | 'ANALYTICS' | 'AUDIT'>('CASES');
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -260,9 +261,24 @@ export default function AdminDashboard() {
           <BarChart3 className="w-4 h-4 text-indigo-600" />
           <span>Campus Analytics & Hotspot Heatmap</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setAdminTab('AUDIT')}
+          className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs sm:text-sm transition-all border-b-2 -mb-[2px] ${
+            adminTab === 'AUDIT'
+              ? 'border-sky-600 text-sky-800 bg-sky-50/70 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-t-xl'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4 text-rose-600" />
+          <span>Security Audit & Break-Glass</span>
+        </button>
       </div>
 
-      {adminTab === 'ANALYTICS' ? (
+      {adminTab === 'AUDIT' ? (
+        <AuditTrail />
+      ) : adminTab === 'ANALYTICS' ? (
         <AdminAnalytics />
       ) : (
         <>

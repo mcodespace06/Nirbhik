@@ -5,6 +5,8 @@ import { authenticate, optionalAuthenticate } from '../middleware/auth.middlewar
 import { requirePermission, AuthenticatedRequest } from '../services/auth/rbac';
 import { ingestRuleChunks } from '../services/rules/chunking';
 import { askRulesAssistant } from '../services/rules/rag';
+import { recordAuditLog } from '../services/audit/audit.service';
+import { aiAssistantLimiter } from '../middleware/rate-limit';
 
 export const rulesRouter = Router();
 export const adminRulesRouter = Router();
@@ -176,6 +178,14 @@ adminRulesRouter.post(
       // 3. Chunk and ingest
       await ingestRuleChunks(rule.id, title, bodyMd, 1);
 
+      await recordAuditLog({
+        actorId: req.user!.id,
+        action: 'RULE_CREATED',
+        entity: 'rule_documents',
+        entityId: rule.id,
+        meta: { title, category, version: 1 },
+      });
+
       return res.status(201).json({ rule });
     } catch (error: any) {
       return res.status(500).json({ error: { code: 'SERVER_ERROR', message: error.message } });
@@ -231,6 +241,14 @@ adminRulesRouter.put(
 
       await ingestRuleChunks(id, newTitle, parsed.data.bodyMd, nextVersion);
 
+      await recordAuditLog({
+        actorId: req.user!.id,
+        action: 'RULE_UPDATED',
+        entity: 'rule_documents',
+        entityId: id,
+        meta: { title: newTitle, category: newCategory, version: nextVersion },
+      });
+
       return res.status(200).json({ rule: updated });
     } catch (error: any) {
       return res.status(500).json({ error: { code: 'SERVER_ERROR', message: error.message } });
@@ -255,6 +273,15 @@ adminRulesRouter.delete(
       }
 
       await prisma.ruleDocument.delete({ where: { id } });
+
+      await recordAuditLog({
+        actorId: _req.user!.id,
+        action: 'RULE_DELETED',
+        entity: 'rule_documents',
+        entityId: id,
+        meta: { title: existing.title },
+      });
+
       return res.status(200).json({ message: 'Rule document deleted successfully.' });
     } catch (error: any) {
       return res.status(500).json({ error: { code: 'SERVER_ERROR', message: error.message } });
@@ -270,7 +297,7 @@ adminRulesRouter.delete(
  * POST /api/assistant/chat
  * Multi-turn assistant chat endpoint
  */
-assistantRouter.post('/chat', optionalAuthenticate, async (req: AuthenticatedRequest, res: Response) => {
+assistantRouter.post('/chat', aiAssistantLimiter, optionalAuthenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const parsed = AskRulesSchema.safeParse(req.body);
     if (!parsed.success) {

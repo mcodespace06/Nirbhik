@@ -58,3 +58,36 @@ export function sanitizeUploadMetadata(opts: {
     fileKey,
   };
 }
+
+/**
+ * Sanitizes untrusted user text against XSS injection, dangerous HTML, and control chars
+ * (ARCHITECTURE.md §11)
+ */
+export function sanitizeText(input: string): string {
+  if (typeof input !== 'string') return input;
+
+  return input
+    // Neutralize dangerous tags
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+    // Neutralize event handlers
+    .replace(/\bon\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '')
+    // Neutralize javascript: pseudoprotocol
+    .replace(/javascript:[^\s"'>]+/gi, '')
+    .trim();
+}
+
+/**
+ * HTML entity encoding for safe rendering
+ */
+export function escapeHtml(str: string): string {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}

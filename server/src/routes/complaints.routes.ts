@@ -8,6 +8,7 @@ import { authenticate, optionalAuthenticate } from '../middleware/auth.middlewar
 import { requireRole, AuthenticatedRequest } from '../services/auth/rbac';
 import { ComplaintMode, Role, RestrictedQueue, ComplaintStatus } from '@prisma/client';
 import { analyzeComplaint } from '../services/ai/analyze';
+import { complaintSubmitLimiter } from '../middleware/rate-limit';
 
 const router = Router();
 
@@ -38,7 +39,7 @@ router.get('/locations', async (_req: Request, res: Response) => {
  * Complaint intake endpoint (CMP-1, CMP-2, CMP-3)
  * Non-Negotiable Rule 1: complaints table has NO user_id column.
  */
-router.post('/', optionalAuthenticate, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', complaintSubmitLimiter, optionalAuthenticate, async (req: AuthenticatedRequest, res: Response) => {
   const parseResult = CreateComplaintSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({

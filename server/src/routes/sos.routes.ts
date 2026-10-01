@@ -7,6 +7,7 @@ import { Role, SosStatus } from '@prisma/client';
 import { dispatchSosAlert } from '../services/sos/dispatch';
 import { sosBus } from '../services/sos/bus';
 import { findNearestPoliceStations } from '../services/sos/haversine';
+import { sosTriggerLimiter } from '../middleware/rate-limit';
 
 export const sosRouter = Router();
 export const securityRouter = Router();
@@ -43,7 +44,7 @@ const PoliceStationSchema = z.object({
  * Immediate emergency SOS distress trigger (ARCHITECTURE.md §9)
  * Non-negotiable copy rule: "alert sent to registered police/security contacts" and Call 112 button.
  */
-sosRouter.post('/', optionalAuthenticate, async (req: AuthenticatedRequest, res: Response) => {
+sosRouter.post('/', sosTriggerLimiter, optionalAuthenticate, async (req: AuthenticatedRequest, res: Response) => {
   const parseResult = TriggerSosSchema.safeParse(req.body);
   if (!parseResult.success) {
     return res.status(400).json({
