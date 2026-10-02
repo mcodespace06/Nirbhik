@@ -126,57 +126,59 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
   });
 
   if (rosterEntry) {
-    // Roster matched! Create pending user and send OTP
+    // Roster matched! Create active user immediately (bypassing OTP)
     const user = await prisma.user.create({
       data: {
         username,
         passwordHash,
         collegeEmail,
         rosterId: rosterEntry.id,
-        role: rosterEntry.role, // role assigned strictly from roster!
-        status: UserStatus.PENDING_VERIFY,
+        role: rosterEntry.role,
+        status: UserStatus.ACTIVE,
         department: rosterEntry.department,
       },
     });
 
     // Vault encrypted confidential profiling details if provided (Section 1)
-    if (req.body.legalName || req.body.phone || req.body.address || req.body.aadhaarNumber) {
+    if (req.body.legalName || req.body.phone || req.body.address || req.body.collegeIdCardNumber) {
       vaultVictimProfile(user.id, {
         legalName: req.body.legalName || username,
         phone: req.body.phone || '',
         email: collegeEmail,
         address: req.body.address || '',
-        aadhaarNumber: req.body.aadhaarNumber,
-        verificationToken: req.body.aadhaarToken,
+        collegeIdCardNumber: req.body.collegeIdCardNumber,
       });
     }
 
-    const otp = generateOTP();
-    const otpHash = hashOTP(otp);
-    const otpExpires = getOTPExpiry(10);
-
-    await prisma.verificationRequest.create({
-      data: {
-        userId: user.id,
-        method: 'ROSTER_OTP',
-        otpHash,
-        otpExpires,
-        status: 'PENDING',
-      },
+    await prisma.collegeRoster.update({
+      where: { id: rosterEntry.id },
+      data: { claimed: true },
     });
 
-    await sendEmail({
-      to: collegeEmail,
-      subject: 'CampusVoice Verification Code',
-      text: `Your CampusVoice verification code is: ${otp}. It expires in 10 minutes. Do not share this code with anyone.`,
+    const sessionUser = {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      status: user.status,
+      collegeEmail: user.collegeEmail,
+      department: user.department,
+    };
+
+    const token = signToken(sessionUser);
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.status(201).json({
-      message: 'Roster match verified. Verification OTP sent to your college email.',
+      message: 'Roster match verified. Account activated successfully.',
       userId: user.id,
-      method: 'ROSTER_OTP',
-      // In non-production, return preview OTP for testing convenience
-      ...(process.env.NODE_ENV !== 'production' && { devOtp: otp }),
+      method: 'SUCCESS',
+      token,
+      user: sessionUser
     });
   } else {
     // No roster match -> fallback to ID Card upload queue (AUTH-3)
@@ -189,14 +191,13 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
       },
     });
 
-    if (req.body.legalName || req.body.phone || req.body.address || req.body.aadhaarNumber) {
+    if (req.body.legalName || req.body.phone || req.body.address || req.body.collegeIdCardNumber) {
       vaultVictimProfile(user.id, {
         legalName: req.body.legalName || username,
         phone: req.body.phone || '',
         email: collegeEmail,
         address: req.body.address || '',
-        aadhaarNumber: req.body.aadhaarNumber,
-        verificationToken: req.body.aadhaarToken,
+        collegeIdCardNumber: req.body.collegeIdCardNumber,
       });
     }
 
